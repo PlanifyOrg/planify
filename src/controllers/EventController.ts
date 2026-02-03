@@ -18,8 +18,7 @@ export class EventController {
    */
   public createEvent = async (req: Request, res: Response): Promise<void> => {
     try {
-      const eventData: CreateEventDto = req.body;
-      const { organizerId } = req.body;
+      const { organizerId, title, description, startDate, endDate, location } = req.body;
 
       if (!organizerId) {
         res.status(400).json({
@@ -28,6 +27,22 @@ export class EventController {
         });
         return;
       }
+
+      if (!title || !startDate || !endDate) {
+        res.status(400).json({
+          success: false,
+          message: 'title, startDate, and endDate are required',
+        });
+        return;
+      }
+
+      const eventData: CreateEventDto = {
+        title,
+        description: description || '',
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        location: location || '',
+      };
 
       const event = this.eventService.createEvent(organizerId, eventData);
 
@@ -107,7 +122,15 @@ export class EventController {
   public updateEvent = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const updateData: UpdateEventDto = req.body;
+      const updateData: UpdateEventDto = {};
+
+      // Convert date strings to Date objects if provided
+      if (req.body.title) updateData.title = req.body.title;
+      if (req.body.description) updateData.description = req.body.description;
+      if (req.body.location) updateData.location = req.body.location;
+      if (req.body.status) updateData.status = req.body.status;
+      if (req.body.startDate) updateData.startDate = new Date(req.body.startDate);
+      if (req.body.endDate) updateData.endDate = new Date(req.body.endDate);
 
       const event = this.eventService.updateEvent(id, updateData);
 
