@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register - Planify</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div id="app">
+    <div id="authView" style="display: flex;">
+      <div class="auth-container">
+        <!-- Register Card -->
+        <div class="auth-card">
+          <div class="auth-header">
+            <h2>Create Account</h2>
+            <p>Join Planify today</p>
+          </div>
+          <div class="auth-body">
+            <form id="registerForm">
+              <div class="form-group">
+                <label>Username</label>
+                <input type="text" name="username" placeholder="Choose a username" required>
+              </div>
+              <div class="form-group">
+                <label>Email</label>
+                <input type="email" name="email" placeholder="Enter your email" required>
+              </div>
+              <div class="form-group">
+                <label>Password</label>
+                <input type="password" name="password" placeholder="Create a password" required>
+              </div>
+              <button type="submit" class="btn btn-lg" style="width: 100%;">Create Account</button>
+            </form>
+            <div class="auth-toggle">
+              <p>Already have an account? <a href="index.html"><strong>Sign in here</strong></a></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+  </div>
+
+  <script src="js/register.js"></script>
+</body>
+</html>

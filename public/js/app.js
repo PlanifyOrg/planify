@@ -254,35 +254,10 @@ const displayNotifications = (notifications) => {
     </div>
   `).join('');
 };
-    </div>
-  `).join('');
-};
 
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Planify client application loaded');
   
-  // Auth view toggle
-  const loginCard = document.getElementById('loginCard');
-  const registerCard = document.getElementById('registerCard');
-  const showRegisterBtn = document.getElementById('showRegister');
-  const showLoginBtn = document.getElementById('showLogin');
-
-  if (showRegisterBtn) {
-    showRegisterBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      loginCard.style.display = 'none';
-      registerCard.style.display = 'block';
-    });
-  }
-
-  if (showLoginBtn) {
-    showLoginBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      registerCard.style.display = 'none';
-      loginCard.style.display = 'block';
-    });
-  }
-
   // Tab navigation
   const tabButtons = document.querySelectorAll('.nav-tabs button');
   tabButtons.forEach(button => {
@@ -349,11 +324,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // Login form submission
   const loginForm = document.getElementById('loginForm');
   if (loginForm) {
+    console.log('Login form found, attaching event listener');
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      e.stopPropagation();
+      console.log('Login form submitted');
+      
       const formData = new FormData(loginForm);
       const username = formData.get('username');
       const password = formData.get('password');
+
+      console.log('Attempting login for:', username);
 
       try {
         const response = await fetch(`${API_URL}/auth/login`, {
@@ -363,6 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const data = await response.json();
+        console.log('Login response:', data);
 
         if (data.success) {
           currentUser = data.data;
@@ -376,41 +358,11 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Login error:', error);
         showToast('Unable to connect to server', 'error', 'Login Failed');
       }
+      
+      return false;
     });
-  }
-
-  // Register form submission
-  const registerForm = document.getElementById('registerForm');
-  if (registerForm) {
-    registerForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const formData = new FormData(registerForm);
-      const username = formData.get('username');
-      const email = formData.get('email');
-      const password = formData.get('password');
-
-      try {
-        const response = await fetch(`${API_URL}/auth/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, email, password }),
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          showToast('Account created! Please login.', 'success', 'Registration Complete');
-          // Switch to login card
-          document.getElementById('registerCard').style.display = 'none';
-          document.getElementById('loginCard').style.display = 'block';
-        } else {
-          showToast(data.message || 'Registration failed', 'error', 'Registration Failed');
-        }
-      } catch (error) {
-        console.error('Registration error:', error);
-        showToast('Unable to connect to server', 'error', 'Registration Failed');
-      }
-    });
+  } else {
+    console.error('Login form not found!');
   }
 
   // Create event button
@@ -422,37 +374,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       openEventModal();
-    });
-  }
-      const startDate = prompt('Start date (YYYY-MM-DD):');
-      const endDate = prompt('End date (YYYY-MM-DD):');
-
-      try {
-        const response = await fetch(`${API_URL}/events`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            organizerId: currentUser.id,
-            title,
-            description,
-            location,
-            startDate: new Date(startDate),
-            endDate: new Date(endDate),
-          }),
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          showToast('Event "' + title + '" created successfully!', 'success', 'Event Created');
-          loadUserData();
-        } else {
-          showToast(data.message || 'Failed to create event', 'error', 'Creation Failed');
-        }
-      } catch (error) {
-        console.error('Create event error:', error);
-        showToast('Unable to create event', 'error', 'Creation Failed');
-      }
     });
   }
 
@@ -468,9 +389,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let meetingParticipants = [];
   let agendaItems = [];
   let agendaCounter = 0;
-
-  // Create meeting button
-  const createMeetingBtn = document.getElementById('createMeetingBtn');
   
   if (createMeetingBtn) {
     createMeetingBtn.addEventListener('click', () => {
