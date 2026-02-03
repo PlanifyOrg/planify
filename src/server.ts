@@ -7,9 +7,11 @@ import dotenv from 'dotenv';
 import { AuthService } from './services/AuthService';
 import { EventService } from './services/EventService';
 import { NotificationService } from './services/NotificationService';
+import { MeetingService } from './services/MeetingService';
 import { AuthController } from './controllers/AuthController';
 import { EventController } from './controllers/EventController';
 import { NotificationController } from './controllers/NotificationController';
+import { MeetingController } from './controllers/MeetingController';
 import { initializeDatabase } from './utils/database';
 
 // Load environment variables
@@ -22,11 +24,13 @@ initializeDatabase();
 const authService = new AuthService();
 const eventService = new EventService();
 const notificationService = new NotificationService();
+const meetingService = new MeetingService();
 
 // Initialize controllers
 const authController = new AuthController(authService);
 const eventController = new EventController(eventService);
 const notificationController = new NotificationController(notificationService);
+const meetingController = new MeetingController(meetingService);
 
 // Create Express app
 const app: Application = express();
@@ -74,6 +78,19 @@ app.put(
   notificationController.markAllAsRead
 );
 
+// Meeting routes
+app.post('/api/meetings', meetingController.createMeeting);
+app.get('/api/meetings/:id', meetingController.getMeetingById);
+app.get('/api/meetings/event/:eventId', meetingController.getMeetingsByEventId);
+app.put('/api/meetings/:id', meetingController.updateMeeting);
+app.delete('/api/meetings/:id', meetingController.deleteMeeting);
+app.post('/api/meetings/:id/participants', meetingController.addParticipant);
+app.post('/api/meetings/:id/checkin', meetingController.checkInParticipant);
+app.post('/api/meetings/:id/agenda', meetingController.addAgendaItem);
+app.put('/api/meetings/agenda/:agendaItemId/complete', meetingController.completeAgendaItem);
+app.post('/api/meetings/:id/documents', meetingController.addDocument);
+app.put('/api/meetings/documents/:documentId', meetingController.updateDocument);
+
 // 404 handler for API routes
 app.use('/api/*', (_req: Request, res: Response) => {
   res.status(404).json({
@@ -101,6 +118,12 @@ app.listen(PORT, () => {
   console.log('  GET    /api/events/user/:userId');
   console.log('  PUT    /api/events/:id');
   console.log('  DELETE /api/events/:id');
+  console.log('  POST   /api/meetings');
+  console.log('  GET    /api/meetings/:id');
+  console.log('  GET    /api/meetings/event/:eventId');
+  console.log('  POST   /api/meetings/:id/checkin');
+  console.log('  POST   /api/meetings/:id/agenda');
+  console.log('  POST   /api/meetings/:id/documents');
   console.log('  POST   /api/notifications');
   console.log('  GET    /api/notifications/user/:userId');
   console.log('========================================\n');

@@ -8,10 +8,45 @@ export interface Meeting {
   description: string;
   scheduledTime: Date;
   duration: number; // in minutes
-  participants: string[]; // Array of user IDs
+  participants: MeetingParticipant[];
+  agendaItems: AgendaItem[];
+  documents: MeetingDocument[];
   status: MeetingStatus;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface MeetingParticipant {
+  userId: string;
+  checkedIn: boolean;
+  checkedInAt?: Date;
+}
+
+export interface AgendaItem {
+  id: string;
+  title: string;
+  description?: string;
+  duration?: number; // in minutes
+  orderIndex: number;
+  isCompleted: boolean;
+}
+
+export interface MeetingDocument {
+  id: string;
+  title: string;
+  content: string;
+  type: DocumentType;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export enum DocumentType {
+  NOTES = 'notes',
+  MINUTES = 'minutes',
+  AGENDA = 'agenda',
+  ATTACHMENT = 'attachment',
+  PROTOCOL = 'protocol',
 }
 
 export enum MeetingStatus {
@@ -29,4 +64,27 @@ export interface CreateMeetingDto {
   scheduledTime: Date;
   duration: number;
   participants: string[];
+  agendaItems?: CreateAgendaItemDto[];
+}
+
+export interface CreateAgendaItemDto {
+  title: string;
+  description?: string;
+  duration?: number;
+  orderIndex: number;
+}
+
+export interface CreateDocumentDto {
+  title: string;
+  content: string;
+  type: DocumentType;
+  createdBy: string;
+}
+
+export interface UpdateMeetingDto {
+  title?: string;
+  description?: string;
+  scheduledTime?: Date;
+  duration?: number;
+  status?: MeetingStatus;
 }

@@ -75,14 +75,47 @@ export function initializeDatabase(): void {
     )
   `);
 
-  // Meeting participants table
+  // Meeting participants table with check-in status
   db.exec(`
     CREATE TABLE IF NOT EXISTS meeting_participants (
       meeting_id TEXT NOT NULL,
       user_id TEXT NOT NULL,
+      checked_in INTEGER DEFAULT 0,
+      checked_in_at DATETIME,
       PRIMARY KEY (meeting_id, user_id),
       FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Meeting agenda items table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS meeting_agenda_items (
+      id TEXT PRIMARY KEY,
+      meeting_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      duration INTEGER,
+      order_index INTEGER NOT NULL,
+      is_completed INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Meeting documents table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS meeting_documents (
+      id TEXT PRIMARY KEY,
+      meeting_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      type TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
 
