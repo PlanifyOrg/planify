@@ -2,6 +2,57 @@
 const API_URL = 'http://localhost:3000/api';
 let currentUser = null;
 
+// Toast Notification System
+const showToast = (message, type = 'info', title = '') => {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  
+  const icons = {
+    success: '✓',
+    error: '✕',
+    warning: '⚠',
+    info: 'ℹ'
+  };
+
+  const titles = {
+    success: title || 'Success',
+    error: title || 'Error',
+    warning: title || 'Warning',
+    info: title || 'Info'
+  };
+
+  toast.innerHTML = `
+    <span class="toast-icon">${icons[type]}</span>
+    <div class="toast-content">
+      <div class="toast-title">${titles[type]}</div>
+      <div class="toast-message">${message}</div>
+    </div>
+    <button class="toast-close">&times;</button>
+  `;
+
+  container.appendChild(toast);
+
+  // Close button
+  toast.querySelector('.toast-close').addEventListener('click', () => {
+    removeToast(toast);
+  });
+
+  // Auto-remove after 5 seconds
+  setTimeout(() => {
+    removeToast(toast);
+  }, 5000);
+};
+
+const removeToast = (toast) => {
+  toast.classList.add('removing');
+  setTimeout(() => {
+    toast.remove();
+  }, 300);
+};
+
 // Check if user is logged in
 const checkAuth = () => {
   const savedUser = localStorage.getItem('currentUser');
@@ -31,7 +82,7 @@ const logout = () => {
   location.reload();
 };
 
-// Load user's events
+// Load user's events and meetings
 const loadUserData = async () => {
   if (!currentUser) return;
 
@@ -51,8 +102,66 @@ const loadUserData = async () => {
     if (notificationsData.success) {
       displayNotifications(notificationsData.data);
     }
+
+    // Load meetings
+    await loadMeetingsForUser();
   } catch (error) {
     console.error('Failed to load user data:', error);
+  }
+};
+
+// Load meetings for the current user
+const loadMeetingsForUser = async () => {
+  if (!currentUser) return;
+
+  try {
+    // Get user's events first
+    const eventsResponse = await fetch(`${API_URL}/events/user/${currentUser.id}`);
+    const eventsData = await eventsResponse.json();
+    
+    if (!eventsData.success || !eventsData.data.length) {
+      const meetingList = document.querySelector('.meeting-list');
+      if (meetingList) {
+        meetingList.innerHTML = '<p>No meetings yet. Create an event first, then plan a meeting!</p>';
+      }
+      return;
+    }
+
+    const meetingList = document.querySelector('.meeting-list');
+    if (!meetingList) return;
+    
+    meetingList.innerHTML = '';
+
+    // Load meetings for each event
+    for (const event of eventsData.data) {
+      const meetingsResponse = await fetch(`${API_URL}/meetings/event/${event.id}`);
+      const meetingsData = await meetingsResponse.json();
+
+      if (meetingsData.success && meetingsData.data.length > 0) {
+        meetingsData.data.forEach(meeting => {
+          const meetingCard = document.createElement('div');
+          meetingCard.className = 'card';
+          meetingCard.style.cssText = 'margin-bottom: 1rem; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; cursor: pointer;';
+          meetingCard.innerHTML = `
+            <h3>${meeting.title}</h3>
+            <p><strong>Event:</strong> ${event.title}</p>
+            <p><strong>Time:</strong> ${new Date(meeting.scheduledTime).toLocaleString()}</p>
+            <p><strong>Duration:</strong> ${meeting.duration} minutes</p>
+            <p><strong>Participants:</strong> ${meeting.participants.length}</p>
+            <p><strong>Agenda Items:</strong> ${meeting.agendaItems.length}</p>
+            <p><strong>Status:</strong> <span class="status-badge ${meeting.status}">${meeting.status}</span></p>
+            <button class="btn btn-secondary" onclick="viewMeetingDetails('${meeting.id}')">View Details</button>
+          `;
+          meetingList.appendChild(meetingCard);
+        });
+      }
+    }
+
+    if (meetingList.innerHTML === '') {
+      meetingList.innerHTML = '<p>No meetings yet. Create your first meeting!</p>';
+    }
+  } catch (error) {
+    console.error('Failed to load meetings:', error);
   }
 };
 
@@ -166,14 +275,14 @@ document.addEventListener('DOMContentLoaded', () => {
           currentUser = data.data;
           localStorage.setItem('currentUser', JSON.stringify(currentUser));
           loginModal.style.display = 'none';
-          alert('Login successful!');
+          showToast('Welcome back, ' + currentUser.username + '!', 'success', 'Login Successful');
           location.reload();
         } else {
-          alert(data.message || 'Login failed');
+          showToast(data.message || 'Invalid credentials', 'error', 'Login Failed');
         }
       } catch (error) {
         console.error('Login error:', error);
-        alert('Login failed. Please try again.');
+        showToast('Unable to connect to server', 'error', 'Login Failed');
       }
     });
   }
@@ -198,15 +307,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await response.json();
 
         if (data.success) {
-          alert('Registration successful! Please login.');
+          showToast('Account created successfully! Please login.', 'success', 'Registration Complete');
           registerModal.style.display = 'none';
           loginModal.style.display = 'block';
         } else {
-          alert(data.message || 'Registration failed');
+          showToast(data.message || 'Registration failed', 'error', 'Registration Failed');
         }
       } catch (error) {
         console.error('Registration error:', error);
-        alert('Registration failed. Please try again.');
+        showToast('Unable to connect to server', 'error', 'Registration Failed');
       }
     });
   }
@@ -216,7 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (createEventBtn) {
     createEventBtn.addEventListener('click', async () => {
       if (!currentUser) {
-        alert('Please login first!');
+        showToast('Please login first to create events', 'warning', 'Authentication Required');
         loginModal.style.display = 'block';
         return;
       }
@@ -246,14 +355,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await response.json();
 
         if (data.success) {
-          alert('Event created successfully!');
+          showToast('Event "' + title + '" created successfully!', 'success', 'Event Created');
           loadUserData();
         } else {
-          alert(data.message || 'Failed to create event');
+          showToast(data.message || 'Failed to create event', 'error', 'Creation Failed');
         }
       } catch (error) {
         console.error('Create event error:', error);
-        alert('Failed to create event. Please try again.');
+        showToast('Unable to create event', 'error', 'Creation Failed');
       }
     });
   }
@@ -274,7 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (createMeetingBtn) {
     createMeetingBtn.addEventListener('click', async () => {
       if (!currentUser) {
-        alert('Please login first!');
+        showToast('Please login first to plan meetings', 'warning', 'Authentication Required');
         loginModal.style.display = 'block';
         return;
       }
@@ -528,52 +637,6 @@ Follow-up Required:
     }
   }
 
-  // Load meetings for display
-  async function loadMeetings() {
-    if (!currentUser) return;
-
-    try {
-      // Get user's events first
-      const eventsResponse = await fetch(`${API_URL}/events/user/${currentUser.id}`);
-      const eventsData = await eventsResponse.json();
-      
-      if (!eventsData.success || !eventsData.data.length) return;
-
-      const meetingList = document.querySelector('.meeting-list');
-      meetingList.innerHTML = '';
-
-      // Load meetings for each event
-      for (const event of eventsData.data) {
-        const meetingsResponse = await fetch(`${API_URL}/meetings/event/${event.id}`);
-        const meetingsData = await meetingsResponse.json();
-
-        if (meetingsData.success && meetingsData.data.length > 0) {
-          meetingsData.data.forEach(meeting => {
-            const meetingCard = document.createElement('div');
-            meetingCard.className = 'card';
-            meetingCard.innerHTML = `
-              <h3>${meeting.title}</h3>
-              <p><strong>Event:</strong> ${event.title}</p>
-              <p><strong>Time:</strong> ${new Date(meeting.scheduledTime).toLocaleString()}</p>
-              <p><strong>Duration:</strong> ${meeting.duration} minutes</p>
-              <p><strong>Participants:</strong> ${meeting.participants.length}</p>
-              <p><strong>Agenda Items:</strong> ${meeting.agendaItems.length}</p>
-              <p><strong>Status:</strong> <span class="status-badge ${meeting.status}">${meeting.status}</span></p>
-              <button class="btn btn-secondary" onclick="viewMeetingDetails('${meeting.id}')">View Details</button>
-            `;
-            meetingList.appendChild(meetingCard);
-          });
-        }
-      }
-
-      if (meetingList.innerHTML === '') {
-        meetingList.innerHTML = '<p>No meetings yet. Create your first meeting!</p>';
-      }
-    } catch (error) {
-      console.error('Failed to load meetings:', error);
-    }
-  }
-
   // View meeting details
   window.viewMeetingDetails = async function(meetingId) {
     try {
@@ -585,80 +648,110 @@ Follow-up Required:
         const detailModal = document.getElementById('meetingDetailModal');
         const detailContent = document.getElementById('meetingDetailContent');
 
+        const checkedInCount = meeting.participants.filter(p => p.checkedIn).length;
+
         detailContent.innerHTML = `
-          <div class="meeting-header">
+          <div class="meeting-detail-header">
             <h2>${meeting.title}</h2>
-            <p>${meeting.description || 'No description'}</p>
+            <p>${meeting.description || 'No description provided'}</p>
           </div>
 
-          <div class="meeting-info">
-            <div class="info-card">
-              <h4>Scheduled Time</h4>
-              <p>${new Date(meeting.scheduledTime).toLocaleString()}</p>
+          <div class="meeting-meta">
+            <div class="meeting-meta-card">
+              <div class="label">📅 Scheduled</div>
+              <div class="value">${new Date(meeting.scheduledTime).toLocaleDateString()}</div>
+              <div style="font-size: 0.9rem; color: #666;">${new Date(meeting.scheduledTime).toLocaleTimeString()}</div>
             </div>
-            <div class="info-card">
-              <h4>Duration</h4>
-              <p>${meeting.duration} minutes</p>
+            <div class="meeting-meta-card">
+              <div class="label">⏱️ Duration</div>
+              <div class="value">${meeting.duration}</div>
+              <div style="font-size: 0.9rem; color: #666;">minutes</div>
             </div>
-            <div class="info-card">
-              <h4>Status</h4>
-              <p class="status-badge ${meeting.status}">${meeting.status}</p>
+            <div class="meeting-meta-card">
+              <div class="label">👥 Attendance</div>
+              <div class="value">${checkedInCount}/${meeting.participants.length}</div>
+              <div style="font-size: 0.9rem; color: #666;">checked in</div>
+            </div>
+            <div class="meeting-meta-card">
+              <div class="label">📋 Status</div>
+              <div class="value" style="font-size: 1.1rem; text-transform: uppercase;">${meeting.status}</div>
             </div>
           </div>
 
-          <div class="form-section">
-            <h3>Participants (${meeting.participants.length})</h3>
-            <div class="participants-grid">
-              ${meeting.participants.map(p => `
-                <div class="participant-card ${p.checkedIn ? 'checked-in' : ''}">
-                  <span>${p.userId}</span>
-                  <span class="checkin-status ${p.checkedIn ? 'checked-in' : 'not-checked-in'}">
-                    ${p.checkedIn ? '✓ Checked In' : 'Not Checked In'}
-                  </span>
-                  ${!p.checkedIn && p.userId === currentUser.id ? `
-                    <button class="btn btn-primary btn-sm" onclick="checkInToMeeting('${meeting.id}', '${p.userId}')">Check In</button>
-                  ` : ''}
+          <hr class="section-divider">
+
+          <h3 style="margin-bottom: 1rem; color: var(--secondary-color);">👥 Participants</h3>
+          <div class="participant-grid">
+            ${meeting.participants.map(p => {
+              const initial = p.userId.charAt(0).toUpperCase();
+              return `
+                <div class="participant-item ${p.checkedIn ? 'checked-in' : ''}">
+                  <div class="participant-info">
+                    <div class="participant-avatar">${initial}</div>
+                    <div>
+                      <div style="font-weight: 600;">${p.userId}</div>
+                      ${p.checkedIn && p.checkedInAt ? `<div style="font-size: 0.8rem; color: #666;">at ${new Date(p.checkedInAt).toLocaleTimeString()}</div>` : ''}
+                    </div>
+                  </div>
+                  ${p.checkedIn ? `
+                    <span class="checkin-badge checked-in">✓ Checked In</span>
+                  ` : p.userId === currentUser.id ? `
+                    <button class="btn btn-primary" style="padding: 0.5rem 1rem;" onclick="checkInToMeeting('${meeting.id}', '${p.userId}')">Check In</button>
+                  ` : `
+                    <span class="checkin-badge pending">⏱ Pending</span>
+                  `}
+                </div>
+              `;
+            }).join('')}
+          </div>
+
+          <hr class="section-divider">
+
+          <h3 style="margin-bottom: 1rem; color: var(--secondary-color);">📋 Agenda</h3>
+          ${meeting.agendaItems.length > 0 ? `
+            <div class="agenda-timeline">
+              ${meeting.agendaItems.map((item, index) => `
+                <div class="agenda-timeline-item ${item.isCompleted ? 'completed' : ''}">
+                  <div class="agenda-item-header">
+                    <div>
+                      <span style="color: #999; font-size: 0.9rem; margin-right: 0.5rem;">#${index + 1}</span>
+                      <span class="agenda-item-title">${item.title}</span>
+                    </div>
+                    ${item.duration ? `<span class="agenda-item-duration">⏱ ${item.duration} min</span>` : ''}
+                  </div>
+                  ${item.description ? `<div style="color: #666; margin-top: 0.5rem;">${item.description}</div>` : ''}
+                  ${item.isCompleted ? '<div style="color: var(--success-color); margin-top: 0.5rem; font-weight: 600;">✓ Completed</div>' : ''}
                 </div>
               `).join('')}
             </div>
-          </div>
+          ` : '<p style="color: #999; font-style: italic;">No agenda items defined</p>'}
 
-          <div class="form-section">
-            <h3>Agenda (${meeting.agendaItems.length} items)</h3>
-            <ul class="agenda-items-list">
-              ${meeting.agendaItems.length > 0 ? meeting.agendaItems.map(item => `
-                <li class="${item.isCompleted ? 'completed' : ''}">
-                  <div>
-                    <strong>${item.title}</strong>
-                    ${item.description ? `<p>${item.description}</p>` : ''}
-                    ${item.duration ? `<small>${item.duration} minutes</small>` : ''}
+          <hr class="section-divider">
+
+          <h3 style="margin-bottom: 1rem; color: var(--secondary-color);">📄 Documents</h3>
+          ${meeting.documents.length > 0 ? `
+            <div class="document-grid">
+              ${meeting.documents.map(doc => `
+                <div class="document-item">
+                  <div class="document-header">
+                    <span class="document-title">${doc.title}</span>
+                    <span class="document-type ${doc.type}">${doc.type}</span>
                   </div>
-                  ${item.isCompleted ? '<span>✓ Completed</span>' : ''}
-                </li>
-              `).join('') : '<p>No agenda items</p>'}
-            </ul>
-          </div>
-
-          <div class="form-section">
-            <h3>Documents (${meeting.documents.length})</h3>
-            <div class="documents-list">
-              ${meeting.documents.length > 0 ? meeting.documents.map(doc => `
-                <div class="document-card">
-                  <h4>${doc.title}</h4>
-                  <span class="document-type-badge">${doc.type}</span>
-                  <div class="document-content">${doc.content}</div>
-                  <small>Created: ${new Date(doc.createdAt).toLocaleString()}</small>
+                  <div class="document-body">${doc.content}</div>
+                  <div class="document-footer">
+                    Created by ${doc.createdBy} • ${new Date(doc.createdAt).toLocaleString()}
+                  </div>
                 </div>
-              `).join('') : '<p>No documents yet</p>'}
+              `).join('')}
             </div>
-          </div>
+          ` : '<p style="color: #999; font-style: italic;">No documents yet</p>'}
         `;
 
         detailModal.style.display = 'block';
       }
     } catch (error) {
       console.error('Failed to load meeting details:', error);
-      alert('Failed to load meeting details');
+      showToast('Unable to load meeting details', 'error', 'Load Failed');
     }
   };
 
@@ -674,22 +767,15 @@ Follow-up Required:
       const data = await response.json();
 
       if (data.success) {
-        alert('Checked in successfully!');
+        showToast('Checked in successfully!', 'success', 'Check-in Complete');
         viewMeetingDetails(meetingId); // Refresh the view
       } else {
-        alert(data.message || 'Failed to check in');
+        showToast(data.message || 'Failed to check in', 'error', 'Check-in Failed');
       }
     } catch (error) {
       console.error('Check in error:', error);
-      alert('Failed to check in');
+      showToast('Unable to check in', 'error', 'Check-in Failed');
     }
-  };
-
-  // Update loadUserData to include meetings
-  const originalLoadUserData = loadUserData;
-  loadUserData = async function() {
-    await originalLoadUserData();
-    await loadMeetings();
   };
 
   // Create task button
@@ -697,11 +783,11 @@ Follow-up Required:
   if (createTaskBtn) {
     createTaskBtn.addEventListener('click', () => {
       if (!currentUser) {
-        alert('Please login first!');
+        showToast('Please login first to create tasks', 'warning', 'Authentication Required');
         loginModal.style.display = 'block';
         return;
       }
-      alert('Task creation coming soon!');
+      showToast('Task creation feature coming soon!', 'info', 'Coming Soon');
     });
   }
 });
