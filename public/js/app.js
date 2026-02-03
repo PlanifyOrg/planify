@@ -416,6 +416,8 @@ document.addEventListener('DOMContentLoaded', () => {
         agendaItems: agendaItems.filter(item => item.title.trim() !== ''),
       };
 
+      console.log('Creating meeting with data:', meetingData);
+
       try {
         // Create meeting
         const response = await fetch(`${API_URL}/meetings`, {
@@ -425,6 +427,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const data = await response.json();
+        
+        console.log('Meeting creation response:', data);
 
         if (data.success) {
           // Create document templates if selected
