@@ -1,4 +1,8 @@
-/* ============================================
+// Script to build complete CSS file
+const fs = require('fs');
+const path = require('path');
+
+const cssContent = `/* ============================================
    PLANIFY - Modern Design System
    ============================================ */
 
@@ -931,4 +935,8 @@ header h1 {
   .modal { padding: var(--spacing-md); }
   #toastContainer { left: var(--spacing-md); right: var(--spacing-md); }
   .toast { min-width: auto; }
-}
+}`;
+
+const cssPath = path.join(__dirname, 'public', 'css', 'styles.css');
+fs.writeFileSync(cssPath, cssContent, 'utf8');
+console.log('✓ Modern CSS design system created successfully!');

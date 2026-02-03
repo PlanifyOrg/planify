@@ -56,23 +56,39 @@ const removeToast = (toast) => {
 // Check if user is logged in
 const checkAuth = () => {
   const savedUser = localStorage.getItem('currentUser');
+  const authView = document.getElementById('authView');
+  const mainView = document.getElementById('mainView');
+  
   if (savedUser) {
     currentUser = JSON.parse(savedUser);
+    if (authView) authView.style.display = 'none';
+    if (mainView) mainView.style.display = 'flex';
     updateUIForLoggedInUser();
+  } else {
+    if (authView) authView.style.display = 'flex';
+    if (mainView) mainView.style.display = 'none';
   }
 };
 
 // Update UI when user is logged in
 const updateUIForLoggedInUser = () => {
-  const authButtons = document.querySelector('.auth-buttons');
-  if (authButtons && currentUser) {
-    authButtons.innerHTML = `
-      <span style="margin-right: 1rem;">Welcome, ${currentUser.username}!</span>
-      <button class="btn btn-secondary" id="logoutBtn">Logout</button>
-    `;
-    document.getElementById('logoutBtn').addEventListener('click', logout);
-    loadUserData();
+  const usernameEl = document.getElementById('currentUsername');
+  const userAvatar = document.getElementById('userAvatar');
+  
+  if (usernameEl && currentUser) {
+    usernameEl.textContent = currentUser.username;
   }
+  
+  if (userAvatar && currentUser) {
+    userAvatar.textContent = currentUser.username.charAt(0).toUpperCase();
+  }
+
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', logout);
+  }
+  
+  loadUserData();
 };
 
 // Logout function
@@ -119,18 +135,19 @@ const loadMeetingsForUser = async () => {
     const eventsResponse = await fetch(`${API_URL}/events/user/${currentUser.id}`);
     const eventsData = await eventsResponse.json();
     
+    const meetingList = document.getElementById('meetingsList');
+    const emptyState = document.getElementById('meetingsEmpty');
+    
+    if (!meetingList) return;
+    
     if (!eventsData.success || !eventsData.data.length) {
-      const meetingList = document.querySelector('.meeting-list');
-      if (meetingList) {
-        meetingList.innerHTML = '<p>No meetings yet. Create an event first, then plan a meeting!</p>';
-      }
+      meetingList.innerHTML = '';
+      if (emptyState) emptyState.style.display = 'block';
       return;
     }
 
-    const meetingList = document.querySelector('.meeting-list');
-    if (!meetingList) return;
-    
     meetingList.innerHTML = '';
+    let hasMeetings = false;
 
     // Load meetings for each event
     for (const event of eventsData.data) {
@@ -138,27 +155,30 @@ const loadMeetingsForUser = async () => {
       const meetingsData = await meetingsResponse.json();
 
       if (meetingsData.success && meetingsData.data.length > 0) {
+        hasMeetings = true;
         meetingsData.data.forEach(meeting => {
           const meetingCard = document.createElement('div');
-          meetingCard.className = 'card';
-          meetingCard.style.cssText = 'margin-bottom: 1rem; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; cursor: pointer;';
+          meetingCard.className = 'meeting-card';
           meetingCard.innerHTML = `
-            <h3>${meeting.title}</h3>
-            <p><strong>Event:</strong> ${event.title}</p>
-            <p><strong>Time:</strong> ${new Date(meeting.scheduledTime).toLocaleString()}</p>
-            <p><strong>Duration:</strong> ${meeting.duration} minutes</p>
-            <p><strong>Participants:</strong> ${meeting.participants.length}</p>
-            <p><strong>Agenda Items:</strong> ${meeting.agendaItems.length}</p>
-            <p><strong>Status:</strong> <span class="status-badge ${meeting.status}">${meeting.status}</span></p>
-            <button class="btn btn-secondary" onclick="viewMeetingDetails('${meeting.id}')">View Details</button>
+            <h4>📋 ${meeting.title}</h4>
+            <div class="meeting-info">
+              <span>🗓️ ${new Date(meeting.scheduledTime).toLocaleString()}</span>
+              <span>⏱️ ${meeting.duration} min</span>
+              <span>👥 ${meeting.participants.length} participants</span>
+              <span>📝 ${meeting.agendaItems.length} agenda items</span>
+            </div>
+            <div class="meeting-actions">
+              <button class="btn btn-sm" onclick="viewMeetingDetails('${meeting.id}')">View Details</button>
+              <button class="btn btn-sm btn-success" onclick="checkInToMeeting('${meeting.id}', '${currentUser.id}')">Check In</button>
+            </div>
           `;
           meetingList.appendChild(meetingCard);
         });
       }
     }
 
-    if (meetingList.innerHTML === '') {
-      meetingList.innerHTML = '<p>No meetings yet. Create your first meeting!</p>';
+    if (emptyState) {
+      emptyState.style.display = hasMeetings ? 'none' : 'block';
     }
   } catch (error) {
     console.error('Failed to load meetings:', error);
@@ -167,54 +187,127 @@ const loadMeetingsForUser = async () => {
 
 // Display events in the UI
 const displayEvents = (events) => {
-  const eventList = document.querySelector('.event-list');
+  const eventList = document.getElementById('eventsList');
+  const emptyState = document.getElementById('eventsEmpty');
+  
   if (!eventList) return;
 
   if (events.length === 0) {
-    eventList.innerHTML = '<p>No events yet. Create your first event!</p>';
+    eventList.innerHTML = '';
+    if (emptyState) emptyState.style.display = 'block';
     return;
   }
 
+  if (emptyState) emptyState.style.display = 'none';
+  
   eventList.innerHTML = events.map(event => `
-    <div class="card" style="margin-bottom: 1rem; padding: 1rem; border: 1px solid #ddd; border-radius: 8px;">
-      <h3>${event.title}</h3>
-      <p>${event.description}</p>
-      <p><strong>Location:</strong> ${event.location}</p>
-      <p><strong>Start:</strong> ${new Date(event.startDate).toLocaleDateString()}</p>
-      <p><strong>Status:</strong> ${event.status}</p>
-      <p><strong>Participants:</strong> ${event.participants.length}</p>
+    <div class="event-card">
+      <div class="event-card-header">
+        <h3>${event.title}</h3>
+        <div class="event-date">📅 ${new Date(event.startDate).toLocaleDateString()}</div>
+      </div>
+      <div class="event-card-body">
+        <p class="event-description">${event.description || 'No description'}</p>
+        <div class="event-meta">
+          <div class="meta-item">
+            <span>📍 <strong>Location:</strong> ${event.location}</span>
+          </div>
+          <div class="meta-item">
+            <span>👥 <strong>Participants:</strong> ${event.participants.length}</span>
+          </div>
+          <div class="meta-item">
+            <span>📊 <strong>Status:</strong> ${event.status}</span>
+          </div>
+        </div>
+      </div>
+      <div class="event-card-footer">
+        <button class="btn btn-sm btn-secondary" onclick="editEvent('${event.id}')">Edit</button>
+        <button class="btn btn-sm" onclick="viewEvent('${event.id}')">View Details</button>
+      </div>
     </div>
   `).join('');
 };
 
 // Display notifications
 const displayNotifications = (notifications) => {
-  const notificationList = document.querySelector('.notification-list');
+  const notificationList = document.getElementById('notificationsList');
+  const emptyState = document.getElementById('notificationsEmpty');
+  
   if (!notificationList) return;
 
   if (notifications.length === 0) {
-    notificationList.innerHTML = '<p>No notifications</p>';
+    notificationList.innerHTML = '';
+    if (emptyState) emptyState.style.display = 'block';
     return;
   }
 
+  if (emptyState) emptyState.style.display = 'none';
+
   notificationList.innerHTML = notifications.map(notification => `
-    <div class="card" style="margin-bottom: 1rem; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; ${!notification.isRead ? 'background-color: #e8f4f8;' : ''}">
-      <h4>${notification.title}</h4>
-      <p>${notification.message}</p>
-      <small>${new Date(notification.createdAt).toLocaleString()}</small>
+    <div class="notification-card ${!notification.isRead ? 'unread' : ''}">
+      <div class="notification-icon">🔔</div>
+      <div class="notification-content">
+        <h4>${notification.title}</h4>
+        <p>${notification.message}</p>
+        <div class="notification-time">${new Date(notification.createdAt).toLocaleString()}</div>
+      </div>
+    </div>
+  `).join('');
+};
     </div>
   `).join('');
 };
 
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Planify client application loaded');
+  
+  // Auth view toggle
+  const loginCard = document.getElementById('loginCard');
+  const registerCard = document.getElementById('registerCard');
+  const showRegisterBtn = document.getElementById('showRegister');
+  const showLoginBtn = document.getElementById('showLogin');
+
+  if (showRegisterBtn) {
+    showRegisterBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      loginCard.style.display = 'none';
+      registerCard.style.display = 'block';
+    });
+  }
+
+  if (showLoginBtn) {
+    showLoginBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      registerCard.style.display = 'none';
+      loginCard.style.display = 'block';
+    });
+  }
+
+  // Tab navigation
+  const tabButtons = document.querySelectorAll('.nav-tabs button');
+  tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const tab = button.getAttribute('data-tab');
+      
+      // Update active button
+      tabButtons.forEach(btn => btn.classList.remove('active'));
+      button.classList.add('active');
+      
+      // Update active section
+      const sections = document.querySelectorAll('.content-section');
+      sections.forEach(section => section.classList.remove('active'));
+      const activeSection = document.getElementById(`${tab}Section`);
+      if (activeSection) {
+        activeSection.classList.add('active');
+      }
+    });
+  });
+
   checkAuth();
 
-  // Modal handling
+  // Modal handling (old modals - remove if not needed)
   const loginModal = document.getElementById('loginModal');
   const registerModal = document.getElementById('registerModal');
-  const loginBtn = document.getElementById('loginBtn');
-  const registerBtn = document.getElementById('registerBtn');
   const closeBtns = document.getElementsByClassName('close');
 
   // Open login modal
@@ -274,9 +367,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.success) {
           currentUser = data.data;
           localStorage.setItem('currentUser', JSON.stringify(currentUser));
-          loginModal.style.display = 'none';
           showToast('Welcome back, ' + currentUser.username + '!', 'success', 'Login Successful');
-          location.reload();
+          checkAuth(); // Switch to main view
         } else {
           showToast(data.message || 'Invalid credentials', 'error', 'Login Failed');
         }
@@ -307,9 +399,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await response.json();
 
         if (data.success) {
-          showToast('Account created successfully! Please login.', 'success', 'Registration Complete');
-          registerModal.style.display = 'none';
-          loginModal.style.display = 'block';
+          showToast('Account created! Please login.', 'success', 'Registration Complete');
+          // Switch to login card
+          document.getElementById('registerCard').style.display = 'none';
+          document.getElementById('loginCard').style.display = 'block';
         } else {
           showToast(data.message || 'Registration failed', 'error', 'Registration Failed');
         }
@@ -323,18 +416,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Create event button
   const createEventBtn = document.getElementById('createEventBtn');
   if (createEventBtn) {
-    createEventBtn.addEventListener('click', async () => {
+    createEventBtn.addEventListener('click', () => {
       if (!currentUser) {
         showToast('Please login first to create events', 'warning', 'Authentication Required');
-        loginModal.style.display = 'block';
         return;
       }
-
-      const title = prompt('Event title:');
-      if (!title) return;
-
-      const description = prompt('Event description:');
-      const location = prompt('Event location:');
+      openEventModal();
+    });
+  }
       const startDate = prompt('Start date (YYYY-MM-DD):');
       const endDate = prompt('End date (YYYY-MM-DD):');
 
@@ -380,33 +469,16 @@ document.addEventListener('DOMContentLoaded', () => {
   let agendaItems = [];
   let agendaCounter = 0;
 
+  // Create meeting button
+  const createMeetingBtn = document.getElementById('createMeetingBtn');
+  
   if (createMeetingBtn) {
-    createMeetingBtn.addEventListener('click', async () => {
+    createMeetingBtn.addEventListener('click', () => {
       if (!currentUser) {
         showToast('Please login first to plan meetings', 'warning', 'Authentication Required');
-        loginModal.style.display = 'block';
         return;
       }
-
-      // Load user's events into the select dropdown
-      try {
-        const response = await fetch(`${API_URL}/events/user/${currentUser.id}`);
-        const data = await response.json();
-        
-        meetingEventSelect.innerHTML = '<option value="">-- Select an Event --</option>';
-        if (data.success && data.data.length > 0) {
-          data.data.forEach(event => {
-            const option = document.createElement('option');
-            option.value = event.id;
-            option.textContent = event.title;
-            meetingEventSelect.appendChild(option);
-          });
-        }
-      } catch (error) {
-        console.error('Failed to load events:', error);
-      }
-
-      meetingModal.style.display = 'block';
+      openMeetingModal();
     });
   }
 
@@ -784,10 +856,196 @@ Follow-up Required:
     createTaskBtn.addEventListener('click', () => {
       if (!currentUser) {
         showToast('Please login first to create tasks', 'warning', 'Authentication Required');
-        loginModal.style.display = 'block';
         return;
       }
       showToast('Task creation feature coming soon!', 'info', 'Coming Soon');
     });
   }
+
+  // Add empty state button listeners
+  const createEventBtnEmpty = document.getElementById('createEventBtnEmpty');
+  const createMeetingBtnEmpty = document.getElementById('createMeetingBtnEmpty');
+  const createTaskBtnEmpty = document.getElementById('createTaskBtnEmpty');
+
+  if (createEventBtnEmpty) {
+    createEventBtnEmpty.addEventListener('click', () => openEventModal());
+  }
+  if (createMeetingBtnEmpty) {
+    createMeetingBtnEmpty.addEventListener('click', () => openMeetingModal());
+  }
+  if (createTaskBtnEmpty) {
+    createTaskBtnEmpty.addEventListener('click', () => {
+      showToast('Task creation feature coming soon!', 'info', 'Coming Soon');
+    });
+  }
 });
+
+// Global modal control functions
+window.openEventModal = function() {
+  const modal = document.getElementById('eventModal');
+  if (modal) {
+    modal.classList.add('active');
+    // Reset form
+    document.getElementById('eventForm').reset();
+  }
+};
+
+window.closeEventModal = function() {
+  const modal = document.getElementById('eventModal');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+};
+
+window.submitEventForm = async function() {
+  const form = document.getElementById('eventForm');
+  const formData = new FormData(form);
+  
+  try {
+    const response = await fetch(`${API_URL}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        organizerId: currentUser.id,
+        title: formData.get('title'),
+        description: formData.get('description'),
+        location: formData.get('location'),
+        startDate: new Date(formData.get('date')),
+        endDate: new Date(formData.get('date')),
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('Event created successfully!', 'success', 'Event Created');
+      closeEventModal();
+      loadUserData();
+    } else {
+      showToast(data.message || 'Failed to create event', 'error', 'Creation Failed');
+    }
+  } catch (error) {
+    console.error('Create event error:', error);
+    showToast('Unable to create event', 'error', 'Creation Failed');
+  }
+};
+
+window.openMeetingModal = function() {
+  const modal = document.getElementById('meetingModal');
+  if (modal) {
+    modal.classList.add('active');
+    document.getElementById('meetingForm').reset();
+    meetingParticipants = [];
+    agendaItems = [];
+    document.getElementById('participantsList').innerHTML = '';
+    document.getElementById('agendaItemsList').innerHTML = '';
+    loadEventsToSelect();
+  }
+};
+
+window.closeMeetingModal = function() {
+  const modal = document.getElementById('meetingModal');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+};
+
+window.submitMeetingForm = async function() {
+  const form = document.getElementById('meetingForm');
+  const formData = new FormData(form);
+
+  // Get selected event
+  const eventId = formData.get('eventId');
+  if (!eventId) {
+    showToast('Please select an event', 'warning', 'Missing Information');
+    return;
+  }
+
+  // Get document templates
+  const createNotes = formData.get('createNotes') === 'notes';
+  const createMinutes = formData.get('createMinutes') === 'minutes';
+  const createProtocol = formData.get('createProtocol') === 'protocol';
+
+  const meetingData = {
+    title: formData.get('title'),
+    description: formData.get('description') || '',
+    eventId: eventId,
+    scheduledTime: new Date(formData.get('scheduledTime')),
+    duration: parseInt(formData.get('duration')),
+    organizerId: currentUser.id,
+    participants: meetingParticipants,
+    agendaItems: agendaItems,
+    documents: []
+  };
+
+  // Add document templates
+  if (createNotes) {
+    meetingData.documents.push({
+      type: 'notes',
+      content: `Meeting Notes for: ${meetingData.title}\n\nDate: ${new Date().toLocaleDateString()}\n\n`
+    });
+  }
+  if (createMinutes) {
+    meetingData.documents.push({
+      type: 'minutes',
+      content: `Meeting Minutes\n\nTitle: ${meetingData.title}\nDate: ${new Date().toLocaleDateString()}\n\n`
+    });
+  }
+  if (createProtocol) {
+    meetingData.documents.push({
+      type: 'protocol',
+      content: `Meeting Protocol\n\nTitle: ${meetingData.title}\nDate: ${new Date().toLocaleDateString()}\n\n`
+    });
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/meetings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(meetingData),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('Meeting created successfully!', 'success', 'Meeting Created');
+      closeMeetingModal();
+      loadUserData();
+    } else {
+      showToast(data.message || 'Failed to create meeting', 'error', 'Creation Failed');
+    }
+  } catch (error) {
+    console.error('Create meeting error:', error);
+    showToast('Unable to create meeting', 'error', 'Creation Failed');
+  }
+};
+
+window.closeMeetingDetailModal = function() {
+  const modal = document.getElementById('meetingDetailModal');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+};
+
+// Helper function to load events into select
+async function loadEventsToSelect() {
+  if (!currentUser) return;
+
+  try {
+    const response = await fetch(`${API_URL}/events/user/${currentUser.id}`);
+    const data = await response.json();
+
+    const select = document.getElementById('meetingEventSelect');
+    if (select && data.success) {
+      select.innerHTML = '<option value="">-- Select an Event --</option>';
+      data.events.forEach(event => {
+        const option = document.createElement('option');
+        option.value = event.id;
+        option.textContent = event.title;
+        select.appendChild(option);
+      });
+    }
+  } catch (error) {
+    console.error('Failed to load events:', error);
+  }
+}
