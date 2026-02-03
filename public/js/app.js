@@ -904,6 +904,212 @@ window.closeMeetingDetailModal = function() {
   }
 };
 
+// View event details
+window.viewEvent = async function(eventId) {
+  try {
+    const response = await fetch(`${API_URL}/events/${eventId}`);
+    const data = await response.json();
+
+    if (data.success && data.data) {
+      const event = data.data;
+      const modal = document.getElementById('eventDetailModal');
+      const content = document.getElementById('eventDetailContent');
+
+      if (!modal || !content) return;
+
+      // Format dates
+      const startDate = new Date(event.startDate);
+      const endDate = new Date(event.endDate);
+      const duration = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24));
+
+      content.innerHTML = `
+        <div class="event-detail-header" style="background: var(--primary-gradient); padding: 2rem; border-radius: var(--radius-lg); margin-bottom: 1.5rem; color: white;">
+          <h2 style="margin: 0 0 0.5rem 0; font-size: 2rem;">${event.title}</h2>
+          <p style="margin: 0; opacity: 0.9;">${event.description || 'No description provided'}</p>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+          <div class="meta-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem; border-radius: var(--radius-lg); color: white;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📅</div>
+            <div style="font-size: 0.875rem; opacity: 0.9;">Start Date</div>
+            <div style="font-size: 1.25rem; font-weight: 600;">${startDate.toLocaleDateString()}</div>
+            <div style="font-size: 0.875rem; opacity: 0.9;">${startDate.toLocaleTimeString()}</div>
+          </div>
+
+          <div class="meta-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 1.5rem; border-radius: var(--radius-lg); color: white;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🏁</div>
+            <div style="font-size: 0.875rem; opacity: 0.9;">End Date</div>
+            <div style="font-size: 1.25rem; font-weight: 600;">${endDate.toLocaleDateString()}</div>
+            <div style="font-size: 0.875rem; opacity: 0.9;">${endDate.toLocaleTimeString()}</div>
+          </div>
+
+          <div class="meta-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 1.5rem; border-radius: var(--radius-lg); color: white;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">⏱️</div>
+            <div style="font-size: 0.875rem; opacity: 0.9;">Duration</div>
+            <div style="font-size: 1.25rem; font-weight: 600;">${duration} ${duration === 1 ? 'Day' : 'Days'}</div>
+          </div>
+
+          <div class="meta-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); padding: 1.5rem; border-radius: var(--radius-lg); color: white;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
+            <div style="font-size: 0.875rem; opacity: 0.9;">Status</div>
+            <div style="font-size: 1.25rem; font-weight: 600;">${event.status}</div>
+          </div>
+        </div>
+
+        <div style="background: white; padding: 1.5rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); margin-bottom: 1rem;">
+          <h3 style="margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem;">
+            <span>📍</span> Location
+          </h3>
+          <p style="margin: 0; color: var(--text-secondary);">${event.location || 'No location specified'}</p>
+        </div>
+
+        <div style="background: white; padding: 1.5rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);">
+          <h3 style="margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem;">
+            <span>👥</span> Participants
+          </h3>
+          <div style="color: var(--text-secondary);">
+            ${event.participants.length} participant(s)
+          </div>
+        </div>
+
+        <div style="margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: flex-end;">
+          <button class="btn btn-secondary" onclick="closeEventDetailModal()">Close</button>
+          <button class="btn" onclick="closeEventDetailModal(); editEvent('${event.id}')">Edit Event</button>
+        </div>
+      `;
+
+      modal.classList.add('active');
+    } else {
+      showToast('Event not found', 'error', 'Error');
+    }
+  } catch (error) {
+    console.error('View event error:', error);
+    showToast('Unable to load event details', 'error', 'Error');
+  }
+};
+
+// Close event detail modal
+window.closeEventDetailModal = function() {
+  const modal = document.getElementById('eventDetailModal');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+};
+
+// Edit event
+window.editEvent = async function(eventId) {
+  try {
+    const response = await fetch(`${API_URL}/events/${eventId}`);
+    const data = await response.json();
+
+    if (data.success && data.data) {
+      const event = data.data;
+      const modal = document.getElementById('eventModal');
+      const form = document.getElementById('eventForm');
+      
+      if (!modal || !form) return;
+
+      // Update modal title
+      const modalHeader = modal.querySelector('.modal-header h2');
+      if (modalHeader) {
+        modalHeader.textContent = 'Edit Event';
+      }
+
+      // Update submit button
+      const modalFooter = modal.querySelector('.modal-footer');
+      if (modalFooter) {
+        modalFooter.innerHTML = `
+          <button class="btn btn-secondary" onclick="closeEventModal(); resetEventModal()">Cancel</button>
+          <button class="btn" onclick="updateEventForm('${eventId}')">Update Event</button>
+        `;
+      }
+
+      // Populate form with event data
+      form.elements['title'].value = event.title;
+      form.elements['description'].value = event.description || '';
+      form.elements['location'].value = event.location || '';
+      
+      // Format dates for datetime-local input
+      const startDate = new Date(event.startDate);
+      const formattedDate = startDate.toISOString().slice(0, 16);
+      form.elements['date'].value = formattedDate;
+
+      modal.classList.add('active');
+    } else {
+      showToast('Event not found', 'error', 'Error');
+    }
+  } catch (error) {
+    console.error('Edit event error:', error);
+    showToast('Unable to load event for editing', 'error', 'Error');
+  }
+};
+
+// Update event form submission
+window.updateEventForm = async function(eventId) {
+  const form = document.getElementById('eventForm');
+  const formData = new FormData(form);
+  
+  const dateValue = formData.get('date');
+  const startDate = new Date(dateValue);
+  const endDate = new Date(startDate);
+  endDate.setHours(startDate.getHours() + 2); // Default 2 hour duration
+
+  try {
+    const response = await fetch(`${API_URL}/events/${eventId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: formData.get('title'),
+        description: formData.get('description'),
+        location: formData.get('location'),
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('Event updated successfully!', 'success', 'Event Updated');
+      closeEventModal();
+      resetEventModal();
+      loadUserData();
+    } else {
+      showToast(data.message || 'Failed to update event', 'error', 'Update Failed');
+    }
+  } catch (error) {
+    console.error('Update event error:', error);
+    showToast('Unable to update event', 'error', 'Update Failed');
+  }
+};
+
+// Reset event modal to create mode
+window.resetEventModal = function() {
+  const modal = document.getElementById('eventModal');
+  if (!modal) return;
+
+  // Reset modal title
+  const modalHeader = modal.querySelector('.modal-header h2');
+  if (modalHeader) {
+    modalHeader.textContent = 'Create Event';
+  }
+
+  // Reset submit button
+  const modalFooter = modal.querySelector('.modal-footer');
+  if (modalFooter) {
+    modalFooter.innerHTML = `
+      <button class="btn btn-secondary" onclick="closeEventModal()">Cancel</button>
+      <button class="btn" onclick="submitEventForm()">Create Event</button>
+    `;
+  }
+
+  // Clear form
+  const form = document.getElementById('eventForm');
+  if (form) {
+    form.reset();
+  }
+};
+
 // Helper function to load events into select
 async function loadEventsToSelect() {
   if (!currentUser) return;
