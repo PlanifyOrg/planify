@@ -10,9 +10,13 @@ import { NotificationService } from './services/NotificationService';
 import { AuthController } from './controllers/AuthController';
 import { EventController } from './controllers/EventController';
 import { NotificationController } from './controllers/NotificationController';
+import { initializeDatabase } from './utils/database';
 
 // Load environment variables
 dotenv.config();
+
+// Initialize database
+initializeDatabase();
 
 // Initialize services
 const authService = new AuthService();

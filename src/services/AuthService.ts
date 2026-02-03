@@ -2,26 +2,35 @@
  * AuthService handles user authentication and authorization
  */
 import { User, CreateUserDto, UserRole } from '../models/User';
+import { db } from '../utils/database';
 
 export class AuthService {
-  private users: Map<string, User> = new Map();
-
   /**
    * Register a new user
    */
   public async register(userData: CreateUserDto): Promise<User> {
     const userId = this.generateId();
+    const passwordHash = await this.hashPassword(userData.password);
+    const role = userData.role || UserRole.PARTICIPANT;
+    const now = new Date().toISOString();
+
+    const stmt = db.prepare(`
+      INSERT INTO users (id, username, email, password_hash, role, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(userId, userData.username, userData.email, passwordHash, role, now, now);
+
     const user: User = {
       id: userId,
       username: userData.username,
       email: userData.email,
-      passwordHash: await this.hashPassword(userData.password),
-      role: userData.role || UserRole.PARTICIPANT,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      passwordHash,
+      role,
+      createdAt: new Date(now),
+      updatedAt: new Date(now),
     };
 
-    this.users.set(userId, user);
     return user;
   }
 
@@ -29,23 +38,51 @@ export class AuthService {
    * Login a user
    */
   public async login(username: string, password: string): Promise<User | null> {
-    const user = Array.from(this.users.values()).find(
-      (u) => u.username === username
-    );
+    const stmt = db.prepare('SELECT * FROM users WHERE username = ?');
+    const row = stmt.get(username) as any;
 
-    if (!user) {
+    if (!row) {
       return null;
     }
 
-    const isValid = await this.verifyPassword(password, user.passwordHash);
-    return isValid ? user : null;
+    const isValid = await this.verifyPassword(password, row.password_hash);
+    if (!isValid) {
+      return null;
+    }
+
+    const user: User = {
+      id: row.id,
+      username: row.username,
+      email: row.email,
+      passwordHash: row.password_hash,
+      role: row.role as UserRole,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at),
+    };
+
+    return user;
   }
 
   /**
    * Get user by ID
    */
   public getUserById(userId: string): User | undefined {
-    return this.users.get(userId);
+    const stmt = db.prepare('SELECT * FROM users WHERE id = ?');
+    const row = stmt.get(userId) as any;
+
+    if (!row) {
+      return undefined;
+    }
+
+    return {
+      id: row.id,
+      username: row.username,
+      email: row.email,
+      passwordHash: row.password_hash,
+      role: row.role as UserRole,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at),
+    };
   }
 
   /**

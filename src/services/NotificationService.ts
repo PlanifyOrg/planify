@@ -6,10 +6,9 @@ import {
   CreateNotificationDto,
   NotificationType,
 } from '../models/Notification';
+import { db } from '../utils/database';
 
 export class NotificationService {
-  private notifications: Map<string, Notification> = new Map();
-
   /**
    * Create a new notification
    */
@@ -17,7 +16,25 @@ export class NotificationService {
     notificationData: CreateNotificationDto
   ): Notification {
     const notificationId = this.generateId();
-    const notification: Notification = {
+    const now = new Date().toISOString();
+
+    const stmt = db.prepare(`
+      INSERT INTO notifications (id, recipient_id, sender_id, type, title, message, related_entity_id, is_read, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
+    `);
+
+    stmt.run(
+      notificationId,
+      notificationData.recipientId,
+      notificationData.senderId || null,
+      notificationData.type,
+      notificationData.title,
+      notificationData.message,
+      notificationData.relatedEntityId || null,
+      now
+    );
+
+    return {
       id: notificationId,
       recipientId: notificationData.recipientId,
       senderId: notificationData.senderId,
@@ -26,47 +43,55 @@ export class NotificationService {
       message: notificationData.message,
       relatedEntityId: notificationData.relatedEntityId,
       isRead: false,
-      createdAt: new Date(),
+      createdAt: new Date(now),
     };
-
-    this.notifications.set(notificationId, notification);
-    return notification;
   }
 
   /**
    * Get notifications for a user
    */
   public getNotificationsByUserId(userId: string): Notification[] {
-    return Array.from(this.notifications.values())
-      .filter((n) => n.recipientId === userId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const stmt = db.prepare(`
+      SELECT * FROM notifications
+      WHERE recipient_id = ?
+      ORDER BY created_at DESC
+    `);
+    const rows = stmt.all(userId) as any[];
+
+    return rows.map(row => ({
+      id: row.id,
+      recipientId: row.recipient_id,
+      senderId: row.sender_id,
+      type: row.type as NotificationType,
+      title: row.title,
+      message: row.message,
+      relatedEntityId: row.related_entity_id,
+      isRead: row.is_read === 1,
+      createdAt: new Date(row.created_at),
+    }));
   }
 
   /**
    * Mark notification as read
    */
   public markAsRead(notificationId: string): boolean {
-    const notification = this.notifications.get(notificationId);
-    if (!notification) {
-      return false;
-    }
-
-    notification.isRead = true;
-    return true;
+    const stmt = db.prepare(`
+      UPDATE notifications SET is_read = 1 WHERE id = ?
+    `);
+    const result = stmt.run(notificationId);
+    return result.changes > 0;
   }
 
   /**
    * Mark all notifications as read for a user
    */
   public markAllAsRead(userId: string): number {
-    let count = 0;
-    this.notifications.forEach((notification) => {
-      if (notification.recipientId === userId && !notification.isRead) {
-        notification.isRead = true;
-        count++;
-      }
-    });
-    return count;
+    const stmt = db.prepare(`
+      UPDATE notifications SET is_read = 1
+      WHERE recipient_id = ? AND is_read = 0
+    `);
+    const result = stmt.run(userId);
+    return result.changes;
   }
 
   /**
