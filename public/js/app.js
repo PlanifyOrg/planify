@@ -280,47 +280,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   checkAuth();
 
-  // Modal handling (old modals - remove if not needed)
-  const loginModal = document.getElementById('loginModal');
-  const registerModal = document.getElementById('registerModal');
-  const closeBtns = document.getElementsByClassName('close');
-
-  // Open login modal
-  if (loginBtn) {
-    loginBtn.addEventListener('click', () => {
-      if (loginModal) {
-        loginModal.style.display = 'block';
-      }
-    });
-  }
-
-  // Open register modal
-  if (registerBtn) {
-    registerBtn.addEventListener('click', () => {
-      if (registerModal) {
-        registerModal.style.display = 'block';
-      }
-    });
-  }
-
-  // Close modals
-  Array.from(closeBtns).forEach((btn) => {
-    btn.addEventListener('click', () => {
-      if (loginModal) loginModal.style.display = 'none';
-      if (registerModal) registerModal.style.display = 'none';
-    });
-  });
-
-  // Close modal when clicking outside
-  window.addEventListener('click', (event) => {
-    if (event.target === loginModal) {
-      loginModal.style.display = 'none';
-    }
-    if (event.target === registerModal) {
-      registerModal.style.display = 'none';
-    }
-  });
-
   // Login form submission
   const loginForm = document.getElementById('loginForm');
   if (loginForm) {
