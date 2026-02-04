@@ -602,6 +602,63 @@ header h1 {
 
 .modal-body {
   padding: var(--spacing-xl);
+  max-height: 70vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.modal-body::-webkit-scrollbar {
+  display: none;
+}
+
+.modal-body {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.modal-scroll-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: linear-gradient(to bottom, transparent 0%, rgba(255, 255, 255, 0.95) 50%, rgba(255, 255, 255, 1) 100%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: var(--spacing-md);
+  pointer-events: none;
+  transition: opacity var(--transition-base);
+  z-index: 10;
+}
+
+.modal-scroll-indicator.hidden {
+  opacity: 0;
+}
+
+.scroll-arrow {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: var(--primary-color);
+  animation: bounce 2s infinite;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: var(--radius-full);
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-8px);
+  }
+  60% {
+    transform: translateY(-4px);
+  }
 }
 
 .modal-footer {

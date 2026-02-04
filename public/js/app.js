@@ -978,6 +978,29 @@ window.viewEvent = async function(eventId) {
         </div>
       `;
 
+      // Add scroll indicator
+      const scrollIndicator = document.createElement('div');
+      scrollIndicator.className = 'modal-scroll-indicator';
+      scrollIndicator.id = 'eventScrollIndicator';
+      scrollIndicator.innerHTML = '<div class="scroll-arrow">↓</div>';
+      content.appendChild(scrollIndicator);
+
+      // Handle scroll indicator visibility
+      const modalBody = content.parentElement;
+      const updateScrollIndicator = () => {
+        const isScrollable = modalBody.scrollHeight > modalBody.clientHeight;
+        const isAtBottom = modalBody.scrollHeight - modalBody.scrollTop <= modalBody.clientHeight + 10;
+        
+        if (!isScrollable || isAtBottom) {
+          scrollIndicator.classList.add('hidden');
+        } else {
+          scrollIndicator.classList.remove('hidden');
+        }
+      };
+
+      modalBody.addEventListener('scroll', updateScrollIndicator);
+      setTimeout(updateScrollIndicator, 100); // Initial check
+
       modal.classList.add('active');
     } else {
       showToast('Event not found', 'error', 'Error');
