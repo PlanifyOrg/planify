@@ -11,6 +11,7 @@ import {
   CreateAgendaItemDto,
   CreateDocumentDto,
   MeetingParticipant,
+  ResponseType,
 } from '../models/Meeting';
 import { db } from '../utils/database';
 
@@ -90,9 +91,11 @@ export class MeetingService {
 
     // Get participants with check-in status and usernames
     const participantsStmt = db.prepare(`
-      SELECT mp.user_id, mp.checked_in, mp.checked_in_at, u.username
+      SELECT mp.user_id, mp.checked_in, mp.checked_in_at, u.username,
+             mr.response, mr.reason, mr.responded_at
       FROM meeting_participants mp
       LEFT JOIN users u ON mp.user_id = u.id
+      LEFT JOIN meeting_responses mr ON mp.meeting_id = mr.meeting_id AND mp.user_id = mr.user_id
       WHERE mp.meeting_id = ?
     `);
     const participantRows = participantsStmt.all(meetingId) as any[];
@@ -101,6 +104,9 @@ export class MeetingService {
       username: p.username || 'Unknown User',
       checkedIn: p.checked_in === 1,
       checkedInAt: p.checked_in_at ? new Date(p.checked_in_at) : undefined,
+      response: p.response || undefined,
+      responseReason: p.reason || undefined,
+      respondedAt: p.responded_at ? new Date(p.responded_at) : undefined,
     }));
 
     // Get agenda items
@@ -463,5 +469,115 @@ export class MeetingService {
 
   private generateDocumentId(): string {
     return `document_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  }
+
+  /**
+   * Submit response to a meeting (confirm or decline)
+   * Only allowed for future meetings
+   */
+  public respondToMeeting(
+    meetingId: string,
+    userId: string,
+    response: 'confirmed' | 'declined',
+    reason?: string
+  ): boolean {
+    const meeting = this.getMeetingById(meetingId);
+    
+    if (!meeting) {
+      throw new Error('Meeting not found');
+    }
+
+    // Check if meeting is in the future
+    if (new Date(meeting.scheduledTime) <= new Date()) {
+      throw new Error('Cannot respond to past meetings');
+    }
+
+    // Check if user is a participant
+    const isParticipant = meeting.participants.some(p => p.userId === userId);
+    if (!isParticipant) {
+      throw new Error('User is not a participant of this meeting');
+    }
+
+    // Insert or update response
+    const stmt = db.prepare(`
+      INSERT INTO meeting_responses (meeting_id, user_id, response, reason, responded_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(meeting_id, user_id) 
+      DO UPDATE SET response = ?, reason = ?, responded_at = ?
+    `);
+
+    const now = new Date().toISOString();
+    stmt.run(meetingId, userId, response, reason || null, now, response, reason || null, now);
+
+    // Check if we need to update meeting status
+    this.checkAndUpdateMeetingStatus(meetingId);
+
+    return true;
+  }
+
+  /**
+   * Check meeting responses and update status if > 50% confirmed
+   * If <= 50% confirmed, keep as PROPOSED
+   */
+  private checkAndUpdateMeetingStatus(meetingId: string): void {
+    const meeting = this.getMeetingById(meetingId);
+    
+    if (!meeting) {
+      return;
+    }
+
+    // Only check for PROPOSED meetings
+    if (meeting.status !== MeetingStatus.PROPOSED) {
+      return;
+    }
+
+    const totalParticipants = meeting.participants.length;
+    const confirmedCount = meeting.participants.filter(
+      p => p.response === ResponseType.CONFIRMED
+    ).length;
+
+    // If more than 50% confirmed, set meeting to CONFIRMED
+    if (confirmedCount > totalParticipants / 2) {
+      const stmt = db.prepare(`
+        UPDATE meetings 
+        SET status = ?, updated_at = ?
+        WHERE id = ?
+      `);
+      stmt.run(MeetingStatus.CONFIRMED, new Date().toISOString(), meetingId);
+    }
+  }
+
+  /**
+   * Get response statistics for a meeting
+   */
+  public getMeetingResponseStats(meetingId: string): {
+    total: number;
+    confirmed: number;
+    declined: number;
+    pending: number;
+    confirmationPercentage: number;
+    isConfirmed: boolean;
+  } {
+    const meeting = this.getMeetingById(meetingId);
+    
+    if (!meeting) {
+      throw new Error('Meeting not found');
+    }
+
+    const total = meeting.participants.length;
+    const confirmed = meeting.participants.filter(p => p.response === ResponseType.CONFIRMED).length;
+    const declined = meeting.participants.filter(p => p.response === ResponseType.DECLINED).length;
+    const pending = total - confirmed - declined;
+    const confirmationPercentage = total > 0 ? (confirmed / total) * 100 : 0;
+    const isConfirmed = confirmed > total / 2;
+
+    return {
+      total,
+      confirmed,
+      declined,
+      pending,
+      confirmationPercentage,
+      isConfirmed,
+    };
   }
 }

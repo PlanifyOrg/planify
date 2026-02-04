@@ -312,6 +312,20 @@ export function initializeDatabase(): void {
     console.error('Migration warning:', error);
   }
 
+  // Create meeting_responses table for participant confirmations/declinations
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS meeting_responses (
+      meeting_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      response TEXT NOT NULL,
+      reason TEXT,
+      responded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (meeting_id, user_id),
+      FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
   console.log('✓ Database tables created successfully');
 }
 

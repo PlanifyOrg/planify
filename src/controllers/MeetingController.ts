@@ -752,4 +752,118 @@ export class MeetingController {
       });
     }
   };
+
+  /**
+   * Respond to a meeting (confirm or decline)
+   * POST /api/meetings/:id/respond
+   */
+  public respondToMeeting = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const { userId, response, reason } = req.body;
+
+      if (!userId || !response) {
+        res.status(400).json({
+          success: false,
+          message: 'userId and response are required',
+        });
+        return;
+      }
+
+      if (response !== 'confirmed' && response !== 'declined') {
+        res.status(400).json({
+          success: false,
+          message: 'response must be either "confirmed" or "declined"',
+        });
+        return;
+      }
+
+      try {
+        const success = this.meetingService.respondToMeeting(id, userId, response, reason);
+
+        if (success) {
+          // Get updated meeting to send notification
+          const meeting = this.meetingService.getMeetingById(id);
+          const stats = this.meetingService.getMeetingResponseStats(id);
+
+          // Send notification to meeting creator
+          if (meeting && meeting.createdBy !== userId) {
+            const responder = this.authService.getUserById(userId);
+            const responderName = responder ? responder.username : 'Someone';
+            const responseText = response === 'confirmed' ? 'confirmed' : 'declined';
+            
+            this.notificationService.createNotification({
+              recipientId: meeting.createdBy,
+              senderId: userId,
+              type: NotificationType.MEETING_SCHEDULED,
+              title: `📋 Meeting Response`,
+              message: `${responderName} ${responseText} the meeting "${meeting.title}"${stats.isConfirmed ? ' - Meeting is now confirmed!' : ''}`,
+              relatedEntityId: meeting.id,
+            });
+          }
+
+          res.status(200).json({
+            success: true,
+            message: 'Response recorded successfully',
+            data: {
+              stats: this.meetingService.getMeetingResponseStats(id),
+            },
+          });
+        }
+      } catch (error) {
+        res.status(400).json({
+          success: false,
+          message: error instanceof Error ? error.message : 'Failed to respond to meeting',
+        });
+        return;
+      }
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to respond to meeting',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
+  /**
+   * Get response statistics for a meeting
+   * GET /api/meetings/:id/responses
+   */
+  public getMeetingResponses = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+
+      try {
+        const stats = this.meetingService.getMeetingResponseStats(id);
+        const meeting = this.meetingService.getMeetingById(id);
+
+        res.status(200).json({
+          success: true,
+          data: {
+            stats,
+            participants: meeting?.participants.map(p => ({
+              userId: p.userId,
+              username: p.username,
+              response: p.response || 'pending',
+              reason: p.responseReason,
+              respondedAt: p.respondedAt,
+            })),
+          },
+        });
+      } catch (error) {
+        res.status(404).json({
+          success: false,
+          message: error instanceof Error ? error.message : 'Meeting not found',
+        });
+        return;
+      }
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get meeting responses',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
 }

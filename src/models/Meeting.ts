@@ -28,6 +28,23 @@ export interface MeetingParticipant {
   username?: string;
   checkedIn: boolean;
   checkedInAt?: Date;
+  response?: ResponseType;
+  responseReason?: string;
+  respondedAt?: Date;
+}
+
+export interface MeetingResponse {
+  userId: string;
+  meetingId: string;
+  response: ResponseType;
+  reason?: string;
+  respondedAt: Date;
+}
+
+export enum ResponseType {
+  CONFIRMED = 'confirmed',
+  DECLINED = 'declined',
+  PENDING = 'pending',
 }
 
 export interface AgendaItem {

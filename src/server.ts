@@ -99,6 +99,8 @@ app.put('/api/meetings/:id', meetingController.updateMeeting);
 app.post('/api/meetings/:id/participants', meetingController.addParticipant);
 app.delete('/api/meetings/:id/participants/:userId', meetingController.removeParticipant);
 app.post('/api/meetings/:id/checkin', meetingController.checkInParticipant);
+app.post('/api/meetings/:id/respond', meetingController.respondToMeeting);
+app.get('/api/meetings/:id/responses', meetingController.getMeetingResponses);
 app.post('/api/meetings/:id/flag', meetingController.flagMeeting);
 app.post('/api/meetings/:id/unflag', meetingController.unflagMeeting);
 app.post('/api/meetings/:id/agenda', meetingController.addAgendaItem);
@@ -157,6 +159,8 @@ app.listen(PORT, () => {
   console.log('  GET    /api/meetings/event/:eventId');
   console.log('  GET    /api/meetings/user/:userId');
   console.log('  POST   /api/meetings/:id/checkin');
+  console.log('  POST   /api/meetings/:id/respond');
+  console.log('  GET    /api/meetings/:id/responses');
   console.log('  POST   /api/meetings/:id/agenda');
   console.log('  POST   /api/meetings/:id/documents');
   console.log('  POST   /api/notifications');
