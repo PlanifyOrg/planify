@@ -140,6 +140,9 @@ export class MeetingService {
       agendaItems,
       documents,
       status: row.status as MeetingStatus,
+      flaggedForDeletion: row.flagged_for_deletion === 1,
+      flaggedBy: row.flagged_by || undefined,
+      flaggedAt: row.flagged_at ? new Date(row.flagged_at) : undefined,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     };
@@ -224,6 +227,22 @@ export class MeetingService {
    * Check in a participant
    */
   public checkInParticipant(meetingId: string, userId: string): boolean {
+    // First check if participant exists and is not already checked in
+    const checkStmt = db.prepare(`
+      SELECT checked_in FROM meeting_participants 
+      WHERE meeting_id = ? AND user_id = ?
+    `);
+    const participant = checkStmt.get(meetingId, userId) as any;
+    
+    if (!participant) {
+      return false; // Participant not found
+    }
+    
+    if (participant.checked_in === 1) {
+      return false; // Already checked in
+    }
+    
+    // Now update the check-in status
     const stmt = db.prepare(`
       UPDATE meeting_participants 
       SET checked_in = 1, checked_in_at = ?
@@ -231,6 +250,22 @@ export class MeetingService {
     `);
     const result = stmt.run(new Date().toISOString(), meetingId, userId);
     return result.changes > 0;
+  }
+
+  /**
+   * Remove participant from meeting
+   */
+  public removeParticipant(meetingId: string, userId: string): boolean {
+    try {
+      const stmt = db.prepare(`
+        DELETE FROM meeting_participants
+        WHERE meeting_id = ? AND user_id = ?
+      `);
+      const result = stmt.run(meetingId, userId);
+      return result.changes > 0;
+    } catch (error) {
+      return false;
+    }
   }
 
   /**
@@ -323,7 +358,34 @@ export class MeetingService {
   }
 
   /**
-   * Delete meeting
+   * Flag meeting for deletion
+   */
+  public flagMeetingForDeletion(meetingId: string, userId: string): boolean {
+    const stmt = db.prepare(`
+      UPDATE meetings 
+      SET flagged_for_deletion = 1, flagged_by = ?, flagged_at = ?, updated_at = ?
+      WHERE id = ?
+    `);
+    const now = new Date().toISOString();
+    const result = stmt.run(userId, now, now, meetingId);
+    return result.changes > 0;
+  }
+
+  /**
+   * Unflag meeting for deletion
+   */
+  public unflagMeetingForDeletion(meetingId: string): boolean {
+    const stmt = db.prepare(`
+      UPDATE meetings 
+      SET flagged_for_deletion = 0, flagged_by = NULL, flagged_at = NULL, updated_at = ?
+      WHERE id = ?
+    `);
+    const result = stmt.run(new Date().toISOString(), meetingId);
+    return result.changes > 0;
+  }
+
+  /**
+   * Delete meeting (admin only - should be checked in controller)
    */
   public deleteMeeting(meetingId: string): boolean {
     const stmt = db.prepare('DELETE FROM meetings WHERE id = ?');

@@ -398,6 +398,37 @@ export class MeetingController {
   };
 
   /**
+   * Remove participant from meeting
+   * DELETE /api/meetings/:id/participants/:userId
+   */
+  public removeParticipant = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id, userId } = req.params;
+
+      const success = this.meetingService.removeParticipant(id, userId);
+
+      if (!success) {
+        res.status(404).json({
+          success: false,
+          message: 'Participant not found',
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Participant removed successfully',
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to remove participant',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
+  /**
    * Delete meeting
    * DELETE /api/meetings/:id
    */

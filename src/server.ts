@@ -91,6 +91,7 @@ app.get('/api/meetings/event/:eventId', meetingController.getMeetingsByEventId);
 app.put('/api/meetings/:id', meetingController.updateMeeting);
 app.delete('/api/meetings/:id', meetingController.deleteMeeting);
 app.post('/api/meetings/:id/participants', meetingController.addParticipant);
+app.delete('/api/meetings/:id/participants/:userId', meetingController.removeParticipant);
 app.post('/api/meetings/:id/checkin', meetingController.checkInParticipant);
 app.post('/api/meetings/:id/agenda', meetingController.addAgendaItem);
 app.put('/api/meetings/agenda/:agendaItemId/complete', meetingController.completeAgendaItem);

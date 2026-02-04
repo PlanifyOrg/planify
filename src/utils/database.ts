@@ -116,9 +116,13 @@ export function initializeDatabase(): void {
       scheduled_time DATETIME NOT NULL,
       duration INTEGER NOT NULL,
       status TEXT NOT NULL,
+      flagged_for_deletion INTEGER DEFAULT 0,
+      flagged_by TEXT,
+      flagged_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+      FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+      FOREIGN KEY (flagged_by) REFERENCES users(id) ON DELETE SET NULL
     )
   `);
 

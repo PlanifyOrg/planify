@@ -3,6 +3,7 @@ const API_URL = 'http://localhost:3000/api';
 let currentUser = null;
 let eventParticipants = [];
 let eventParticipantUsernames = {};
+let meetingParticipantUsernames = {};
 
 // Toast Notification System
 const showToast = (message, type = 'info', title = '') => {
@@ -550,43 +551,53 @@ document.addEventListener('DOMContentLoaded', () => {
       meetingModal.style.display = 'none';
       meetingForm.reset();
       meetingParticipants = [];
+      meetingParticipantUsernames = {};
       agendaItems = [];
       participantsList.innerHTML = '';
       agendaItemsList.innerHTML = '';
     });
   }
 
-  // Add participant
-  const addParticipantBtn = document.getElementById('addParticipantBtn');
-  const participantInput = document.getElementById('participantInput');
-  
-  if (addParticipantBtn) {
-    addParticipantBtn.addEventListener('click', () => {
-      const userId = participantInput.value.trim();
-      if (userId && !meetingParticipants.includes(userId)) {
-        meetingParticipants.push(userId);
-        renderParticipants();
-        participantInput.value = '';
-      }
+  // Meeting participant search
+  const meetingParticipantSearch = document.getElementById('meetingParticipantSearch');
+  if (meetingParticipantSearch) {
+    meetingParticipantSearch.addEventListener('input', () => {
+      searchMeetingParticipants();
     });
   }
 
   function renderParticipants() {
-    participantsList.innerHTML = '';
-    meetingParticipants.forEach(userId => {
-      const tag = document.createElement('div');
-      tag.className = 'participant-tag';
-      tag.innerHTML = `
-        <span>${userId}</span>
-        <button class="remove-btn" onclick="removeParticipant('${userId}')">&times;</button>
+    if (!participantsList) return;
+    
+    if (meetingParticipants.length === 0) {
+      participantsList.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 1rem;">No participants added yet</p>';
+      return;
+    }
+
+    participantsList.innerHTML = meetingParticipants.map(userId => {
+      const username = meetingParticipantUsernames[userId] || 'Unknown';
+      return `
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: white; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 32px; height: 32px; border-radius: var(--radius-full); background: var(--primary-gradient); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.875rem;">
+            ${username.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div style="font-weight: 600; font-size: 0.875rem;">${username}</div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); font-family: monospace;">${userId}</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-sm btn-danger" onclick="removeMeetingParticipant('${userId}')">Remove</button>
+      </div>
       `;
-      participantsList.appendChild(tag);
-    });
+    }).join('');
   }
 
-  window.removeParticipant = function(userId) {
+  window.removeMeetingParticipant = function(userId) {
     meetingParticipants = meetingParticipants.filter(id => id !== userId);
+    delete meetingParticipantUsernames[userId];
     renderParticipants();
+    searchMeetingParticipants(); // Refresh search results
   };
 
   // Add agenda item
@@ -694,6 +705,7 @@ document.addEventListener('DOMContentLoaded', () => {
           meetingModal.style.display = 'none';
           meetingForm.reset();
           meetingParticipants = [];
+          meetingParticipantUsernames = {};
           agendaItems = [];
           participantsList.innerHTML = '';
           agendaItemsList.innerHTML = '';
@@ -786,103 +798,114 @@ Follow-up Required:
         const checkedInCount = meeting.participants.filter(p => p.checkedIn).length;
 
         detailContent.innerHTML = `
-          <div class="meeting-detail-header">
-            <h2>${meeting.title}</h2>
-            <p>${meeting.description || 'No description provided'}</p>
+          <div style="background: var(--primary-gradient); padding: 2rem; border-radius: var(--radius-lg); margin-bottom: 1.5rem; color: white;">
+            <h2 style="margin: 0 0 0.5rem 0; font-size: 2rem;">${meeting.title}</h2>
+            <p style="margin: 0; opacity: 0.9;">${meeting.description || 'No description provided'}</p>
           </div>
 
-          <div class="meeting-meta">
-            <div class="meeting-meta-card">
-              <div class="label">📅 Scheduled</div>
-              <div class="value">${new Date(meeting.scheduledTime).toLocaleDateString()}</div>
-              <div style="font-size: 0.9rem; color: #666;">${new Date(meeting.scheduledTime).toLocaleTimeString()}</div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem; border-radius: var(--radius-lg); color: white;">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;">📅</div>
+              <div style="font-size: 0.875rem; opacity: 0.9;">Scheduled</div>
+              <div style="font-size: 1.25rem; font-weight: 600;">${new Date(meeting.scheduledTime).toLocaleDateString()}</div>
+              <div style="font-size: 0.875rem; opacity: 0.9;">${new Date(meeting.scheduledTime).toLocaleTimeString()}</div>
             </div>
-            <div class="meeting-meta-card">
-              <div class="label">⏱️ Duration</div>
-              <div class="value">${meeting.duration}</div>
-              <div style="font-size: 0.9rem; color: #666;">minutes</div>
+            <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 1.5rem; border-radius: var(--radius-lg); color: white;">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;">⏱️</div>
+              <div style="font-size: 0.875rem; opacity: 0.9;">Duration</div>
+              <div style="font-size: 1.25rem; font-weight: 600;">${meeting.duration}</div>
+              <div style="font-size: 0.875rem; opacity: 0.9;">minutes</div>
             </div>
-            <div class="meeting-meta-card">
-              <div class="label">👥 Attendance</div>
-              <div class="value">${checkedInCount}/${meeting.participants.length}</div>
-              <div style="font-size: 0.9rem; color: #666;">checked in</div>
+            <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 1.5rem; border-radius: var(--radius-lg); color: white;">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;">👥</div>
+              <div style="font-size: 0.875rem; opacity: 0.9;">Attendance</div>
+              <div style="font-size: 1.25rem; font-weight: 600;">${checkedInCount}/${meeting.participants.length}</div>
+              <div style="font-size: 0.875rem; opacity: 0.9;">checked in</div>
             </div>
-            <div class="meeting-meta-card">
-              <div class="label">📋 Status</div>
-              <div class="value" style="font-size: 1.1rem; text-transform: uppercase;">${meeting.status}</div>
+            <div style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); padding: 1.5rem; border-radius: var(--radius-lg); color: white;">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
+              <div style="font-size: 0.875rem; opacity: 0.9;">Status</div>
+              <div style="font-size: 1.25rem; font-weight: 600; text-transform: uppercase;">${meeting.status}</div>
             </div>
           </div>
 
-          <hr class="section-divider">
-
-          <h3 style="margin-bottom: 1rem; color: var(--secondary-color);">👥 Participants</h3>
-          <div class="participant-grid">
-            ${meeting.participants.map(p => {
-              const initial = p.userId.charAt(0).toUpperCase();
-              return `
-                <div class="participant-item ${p.checkedIn ? 'checked-in' : ''}">
-                  <div class="participant-info">
-                    <div class="participant-avatar">${initial}</div>
-                    <div>
-                      <div style="font-weight: 600;">${p.userId}</div>
-                      ${p.checkedIn && p.checkedInAt ? `<div style="font-size: 0.8rem; color: #666;">at ${new Date(p.checkedInAt).toLocaleTimeString()}</div>` : ''}
+          <div style="background: white; padding: 1.5rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); margin-bottom: 1rem;">
+            <h3 style="margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem;">
+              <span>👥</span> Participants
+            </h3>
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+              ${meeting.participants.map(p => {
+                const initial = p.userId.charAt(0).toUpperCase();
+                const isCurrentUser = p.userId === currentUser.id;
+                return `
+                  <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: ${p.checkedIn ? 'linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%)' : '#f8f9fa'}; border-radius: var(--radius-md); border: 2px solid ${p.checkedIn ? '#96e6a1' : '#e0e0e0'};">
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                      <div style="width: 40px; height: 40px; border-radius: var(--radius-full); background: var(--primary-gradient); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600;">
+                        ${initial}
+                      </div>
+                      <div>
+                        <div style="font-weight: 600;">${p.userId}${isCurrentUser ? ' (You)' : ''}</div>
+                        ${p.checkedIn && p.checkedInAt ? `<div style="font-size: 0.875rem; color: #666;">✓ Checked in at ${new Date(p.checkedInAt).toLocaleTimeString()}</div>` : '<div style="font-size: 0.875rem; color: #999;">Not checked in yet</div>'}
+                      </div>
                     </div>
+                    ${p.checkedIn ? `
+                      <span style="display: inline-flex; align-items: center; padding: 0.5rem 1rem; background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; border-radius: var(--radius-full); font-size: 0.875rem; font-weight: 600;">✓ Checked In</span>
+                    ` : isCurrentUser ? `
+                      <button class="btn btn-sm" onclick="checkInToMeeting('${meeting.id}', '${p.userId}')" style="background: var(--success-gradient);">Check In Now</button>
+                    ` : `
+                      <span style="font-size: 0.875rem; color: #999;">⏱ Pending</span>
+                    `}
                   </div>
-                  ${p.checkedIn ? `
-                    <span class="checkin-badge checked-in">✓ Checked In</span>
-                  ` : p.userId === currentUser.id ? `
-                    <button class="btn btn-primary" style="padding: 0.5rem 1rem;" onclick="checkInToMeeting('${meeting.id}', '${p.userId}')">Check In</button>
-                  ` : `
-                    <span class="checkin-badge pending">⏱ Pending</span>
-                  `}
-                </div>
-              `;
-            }).join('')}
+                `;
+              }).join('')}
+            </div>
           </div>
 
-          <hr class="section-divider">
-
-          <h3 style="margin-bottom: 1rem; color: var(--secondary-color);">📋 Agenda</h3>
-          ${meeting.agendaItems.length > 0 ? `
-            <div class="agenda-timeline">
-              ${meeting.agendaItems.map((item, index) => `
-                <div class="agenda-timeline-item ${item.isCompleted ? 'completed' : ''}">
-                  <div class="agenda-item-header">
-                    <div>
-                      <span style="color: #999; font-size: 0.9rem; margin-right: 0.5rem;">#${index + 1}</span>
-                      <span class="agenda-item-title">${item.title}</span>
+          <div style="background: white; padding: 1.5rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); margin-bottom: 1rem;">
+            <h3 style="margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem;">
+              <span>📋</span> Agenda
+            </h3>
+            ${meeting.agendaItems.length > 0 ? `
+              <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                ${meeting.agendaItems.map((item, index) => `
+                  <div style="padding: 1rem; background: ${item.isCompleted ? 'linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%)' : '#f8f9fa'}; border-radius: var(--radius-md); border-left: 4px solid ${item.isCompleted ? '#38ef7d' : 'var(--primary-color)'};">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                      <div>
+                        <span style="color: #999; font-size: 0.875rem; margin-right: 0.5rem;">#${index + 1}</span>
+                        <span style="font-weight: 600; font-size: 1.1rem;">${item.title}</span>
+                      </div>
+                      ${item.duration ? `<span style="padding: 0.25rem 0.75rem; background: white; border-radius: var(--radius-full); font-size: 0.875rem; color: #666;">⏱ ${item.duration} min</span>` : ''}
                     </div>
-                    ${item.duration ? `<span class="agenda-item-duration">⏱ ${item.duration} min</span>` : ''}
+                    ${item.description ? `<div style="color: #666; margin-top: 0.5rem;">${item.description}</div>` : ''}
+                    ${item.isCompleted ? '<div style="color: #38ef7d; margin-top: 0.5rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;"><span>✓</span> Completed</div>' : ''}
                   </div>
-                  ${item.description ? `<div style="color: #666; margin-top: 0.5rem;">${item.description}</div>` : ''}
-                  ${item.isCompleted ? '<div style="color: var(--success-color); margin-top: 0.5rem; font-weight: 600;">✓ Completed</div>' : ''}
-                </div>
-              `).join('')}
-            </div>
-          ` : '<p style="color: #999; font-style: italic;">No agenda items defined</p>'}
+                `).join('')}
+              </div>
+            ` : '<p style="color: #999; text-align: center; padding: 2rem;">No agenda items defined</p>'}
+          </div>
 
-          <hr class="section-divider">
-
-          <h3 style="margin-bottom: 1rem; color: var(--secondary-color);">📄 Documents</h3>
-          ${meeting.documents.length > 0 ? `
-            <div class="document-grid">
-              ${meeting.documents.map(doc => `
-                <div class="document-item">
-                  <div class="document-header">
-                    <span class="document-title">${doc.title}</span>
-                    <span class="document-type ${doc.type}">${doc.type}</span>
+          <div style="background: white; padding: 1.5rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);">
+            <h3 style="margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem;">
+              <span>📄</span> Documents
+            </h3>
+            ${meeting.documents.length > 0 ? `
+              <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                ${meeting.documents.map(doc => `
+                  <div style="padding: 1rem; background: #f8f9fa; border-radius: var(--radius-md); border: 1px solid #e0e0e0;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+                      <span style="font-weight: 600; font-size: 1.1rem;">${doc.title}</span>
+                      <span style="padding: 0.25rem 0.75rem; background: var(--primary-gradient); color: white; border-radius: var(--radius-full); font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">${doc.type}</span>
+                    </div>
+                    <div style="color: #666; line-height: 1.6; margin-bottom: 0.75rem;">${doc.content}</div>
+                    <div style="font-size: 0.875rem; color: #999;">Created by ${doc.createdBy} • ${new Date(doc.createdAt).toLocaleString()}</div>
                   </div>
-                  <div class="document-body">${doc.content}</div>
-                  <div class="document-footer">
-                    Created by ${doc.createdBy} • ${new Date(doc.createdAt).toLocaleString()}
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-          ` : '<p style="color: #999; font-style: italic;">No documents yet</p>'}
+                `).join('')}
+              </div>
+            ` : '<p style="color: #999; text-align: center; padding: 2rem;">No documents yet</p>'}
+          </div>
         `;
 
-        detailModal.style.display = 'block';
+        detailModal.classList.add('active');
       }
     } catch (error) {
       console.error('Failed to load meeting details:', error);
@@ -892,6 +915,11 @@ Follow-up Required:
 
   // Check in to meeting
   window.checkInToMeeting = async function(meetingId, userId) {
+    if (!currentUser || userId !== currentUser.id) {
+      showToast('You can only check in for yourself', 'warning', 'Invalid Action');
+      return;
+    }
+
     try {
       const response = await fetch(`${API_URL}/meetings/${meetingId}/checkin`, {
         method: 'POST',
@@ -903,7 +931,10 @@ Follow-up Required:
 
       if (data.success) {
         showToast('Checked in successfully!', 'success', 'Check-in Complete');
-        viewMeetingDetails(meetingId); // Refresh the view
+        // Refresh the meeting details view
+        await viewMeetingDetails(meetingId);
+        // Also refresh the meetings list
+        await loadUserData();
       } else {
         showToast(data.message || 'Failed to check in', 'error', 'Check-in Failed');
       }
@@ -1048,9 +1079,11 @@ window.openMeetingModal = function() {
     modal.classList.add('active');
     document.getElementById('meetingForm').reset();
     meetingParticipants = [];
+    meetingParticipantUsernames = {};
     agendaItems = [];
     document.getElementById('participantsList').innerHTML = '';
     document.getElementById('agendaItemsList').innerHTML = '';
+    document.getElementById('meetingParticipantSearchResults').style.display = 'none';
     loadEventsToSelect();
   }
 };
@@ -2151,4 +2184,102 @@ function renderEventParticipants() {
     `;
   }).join('');
 }
+
+// Search for organization members to add as meeting participants
+window.searchMeetingParticipants = async function() {
+  const searchInput = document.getElementById('meetingParticipantSearch');
+  const searchValue = searchInput.value.trim();
+
+  const resultsContainer = document.getElementById('meetingParticipantSearchResults');
+  
+  // Hide results if no search value
+  if (!searchValue) {
+    resultsContainer.style.display = 'none';
+    return;
+  }
+
+  if (!currentUser) return;
+
+  try {
+    // Get user's organizations
+    const orgResponse = await fetch(`${API_URL}/organizations/user/${currentUser.id}`);
+    const orgData = await orgResponse.json();
+
+    if (!orgData.success || !orgData.data || orgData.data.length === 0) {
+      resultsContainer.innerHTML = '<p style=\"text-align: center; color: var(--text-secondary); padding: 1rem;\">You must be in an organization</p>';
+      resultsContainer.style.display = 'block';
+      return;
+    }
+
+    const org = orgData.data[0];
+
+    // Fetch user details for all organization members
+    const memberPromises = org.memberIds.map(async (userId) => {
+      try {
+        const userResponse = await fetch(`${API_URL}/auth/user/${userId}`);
+        const userData = await userResponse.json();
+        return {
+          id: userId,
+          username: userData.data?.username || 'Unknown User',
+        };
+      } catch {
+        return { id: userId, username: 'Unknown User' };
+      }
+    });
+
+    const members = await Promise.all(memberPromises);
+
+    // Filter members based on search
+    const results = members.filter(member => 
+      member.id.toLowerCase().includes(searchValue.toLowerCase()) ||
+      member.username.toLowerCase().includes(searchValue.toLowerCase())
+    );
+
+    if (results.length === 0) {
+      resultsContainer.innerHTML = '<p style=\"text-align: center; color: var(--text-secondary); padding: 1rem;\">No members found</p>';
+      resultsContainer.style.display = 'block';
+      return;
+    }
+
+    resultsContainer.innerHTML = results.map(member => `
+      <div style=\"display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: white; border-radius: var(--radius-md); margin-bottom: 0.5rem; ${meetingParticipants.includes(member.id) ? 'opacity: 0.5;' : ''}\">
+        <div style=\"display: flex; align-items: center; gap: 0.75rem;\">
+          <div style=\"width: 32px; height: 32px; border-radius: var(--radius-full); background: var(--primary-gradient); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.875rem;\">
+            ${member.username.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div style=\"font-weight: 600; font-size: 0.875rem;\">${member.username}</div>
+            <div style=\"font-size: 0.75rem; color: var(--text-secondary); font-family: monospace;\">${member.id}</div>
+          </div>
+        </div>
+        ${!meetingParticipants.includes(member.id) 
+          ? `<button type=\"button\" class=\"btn btn-sm\" onclick=\"addMeetingParticipantById('${member.id}', '${member.username}')\">Add</button>`
+          : '<span style=\"font-size: 0.875rem; color: var(--text-secondary);\">Already added</span>'
+        }
+      </div>
+    `).join('');
+
+    resultsContainer.style.display = 'block';
+  } catch (error) {
+    console.error('Search participants error:', error);
+    resultsContainer.innerHTML = '<p style=\"text-align: center; color: var(--error); padding: 1rem;\">Failed to search participants</p>';
+    resultsContainer.style.display = 'block';
+  }
+};
+
+// Add meeting participant by ID and username
+window.addMeetingParticipantById = function(userId, username) {
+  if (meetingParticipants.includes(userId)) {
+    showToast('User already added', 'warning', 'Duplicate');
+    return;
+  }
+
+  meetingParticipants.push(userId);
+  meetingParticipantUsernames[userId] = username;
+
+  renderParticipants();
+  searchMeetingParticipants(); // Refresh search results
+  showToast(`${username} added to meeting`, 'success', 'Participant Added');
+};
+
 

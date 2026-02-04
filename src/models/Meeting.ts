@@ -12,6 +12,9 @@ export interface Meeting {
   agendaItems: AgendaItem[];
   documents: MeetingDocument[];
   status: MeetingStatus;
+  flaggedForDeletion: boolean;
+  flaggedBy?: string;
+  flaggedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
