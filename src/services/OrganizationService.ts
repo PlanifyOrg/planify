@@ -4,12 +4,19 @@ import {
   UpdateOrganizationDto,
   defaultOrganizationSettings,
 } from '../models/Organization';
-import { database } from '../utils/database';
+import { db } from '../utils/database';
 
 /**
  * Service for managing organizations
  */
 export class OrganizationService {
+  /**
+   * Generate unique ID
+   */
+  private generateId(): string {
+    return `org_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
   /**
    * Create a new organization
    */
@@ -17,24 +24,49 @@ export class OrganizationService {
     creatorId: string,
     orgData: CreateOrganizationDto
   ): Organization {
-    const now = Date.now();
+    const orgId = this.generateId();
+    const now = new Date().toISOString();
+    const settings = {
+      ...defaultOrganizationSettings,
+      ...orgData.settings,
+    };
+
+    const stmt = db.prepare(`
+      INSERT INTO organizations (id, name, description, logo, website, settings, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      orgId,
+      orgData.name,
+      orgData.description || '',
+      orgData.logo || null,
+      orgData.website || null,
+      JSON.stringify(settings),
+      now,
+      now
+    );
+
+    // Add creator as admin member
+    const memberStmt = db.prepare(`
+      INSERT INTO organization_members (organization_id, user_id, is_admin)
+      VALUES (?, ?, 1)
+    `);
+    memberStmt.run(orgId, creatorId);
+
     const organization: Organization = {
-      id: `org_${now}_${Math.random().toString(36).substr(2, 9)}`,
+      id: orgId,
       name: orgData.name,
-      description: orgData.description,
+      description: orgData.description || '',
       logo: orgData.logo,
       website: orgData.website,
       adminIds: [creatorId],
       memberIds: [creatorId],
-      settings: {
-        ...defaultOrganizationSettings,
-        ...orgData.settings,
-      },
+      settings,
       createdAt: new Date(now),
       updatedAt: new Date(now),
     };
 
-    database.organizations.push(organization);
     return organization;
   }
 
@@ -42,23 +74,38 @@ export class OrganizationService {
    * Get organization by ID
    */
   public getOrganizationById(id: string): Organization | undefined {
-    return database.organizations.find((org) => org.id === id);
+    const stmt = db.prepare('SELECT * FROM organizations WHERE id = ?');
+    const row = stmt.get(id) as any;
+
+    if (!row) {
+      return undefined;
+    }
+
+    return this.mapRowToOrganization(row);
   }
 
   /**
    * Get all organizations
    */
   public getAllOrganizations(): Organization[] {
-    return database.organizations;
+    const stmt = db.prepare('SELECT * FROM organizations');
+    const rows = stmt.all() as any[];
+
+    return rows.map(row => this.mapRowToOrganization(row));
   }
 
   /**
    * Get organizations where user is a member
    */
   public getOrganizationsByUserId(userId: string): Organization[] {
-    return database.organizations.filter((org) =>
-      org.memberIds.includes(userId)
-    );
+    const stmt = db.prepare(`
+      SELECT o.* FROM organizations o
+      INNER JOIN organization_members om ON o.id = om.organization_id
+      WHERE om.user_id = ?
+    `);
+    const rows = stmt.all(userId) as any[];
+
+    return rows.map(row => this.mapRowToOrganization(row));
   }
 
   /**
@@ -68,139 +115,196 @@ export class OrganizationService {
     id: string,
     updateData: UpdateOrganizationDto
   ): Organization | undefined {
-    const org = database.organizations.find((o) => o.id === id);
+    const org = this.getOrganizationById(id);
     if (!org) {
       return undefined;
     }
 
-    if (updateData.name) org.name = updateData.name;
-    if (updateData.description) org.description = updateData.description;
-    if (updateData.logo !== undefined) org.logo = updateData.logo;
-    if (updateData.website !== undefined) org.website = updateData.website;
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (updateData.name) {
+      updates.push('name = ?');
+      values.push(updateData.name);
+    }
+    if (updateData.description !== undefined) {
+      updates.push('description = ?');
+      values.push(updateData.description);
+    }
+    if (updateData.logo !== undefined) {
+      updates.push('logo = ?');
+      values.push(updateData.logo);
+    }
+    if (updateData.website !== undefined) {
+      updates.push('website = ?');
+      values.push(updateData.website);
+    }
     if (updateData.settings) {
-      org.settings = { ...org.settings, ...updateData.settings };
+      const newSettings = { ...org.settings, ...updateData.settings };
+      updates.push('settings = ?');
+      values.push(JSON.stringify(newSettings));
     }
 
-    org.updatedAt = new Date();
-    return org;
+    if (updates.length > 0) {
+      updates.push('updated_at = ?');
+      values.push(new Date().toISOString());
+      values.push(id);
+
+      const stmt = db.prepare(`
+        UPDATE organizations
+        SET ${updates.join(', ')}
+        WHERE id = ?
+      `);
+      stmt.run(...values);
+    }
+
+    return this.getOrganizationById(id);
   }
 
   /**
    * Delete an organization
    */
   public deleteOrganization(id: string): boolean {
-    const index = database.organizations.findIndex((org) => org.id === id);
-    if (index === -1) {
-      return false;
-    }
-
-    database.organizations.splice(index, 1);
-    return true;
+    const stmt = db.prepare('DELETE FROM organizations WHERE id = ?');
+    const result = stmt.run(id);
+    return result.changes > 0;
   }
 
   /**
    * Add a member to an organization
    */
   public addMember(orgId: string, userId: string): boolean {
-    const org = database.organizations.find((o) => o.id === orgId);
-    if (!org) {
+    try {
+      const stmt = db.prepare(`
+        INSERT OR IGNORE INTO organization_members (organization_id, user_id, is_admin)
+        VALUES (?, ?, 0)
+      `);
+      stmt.run(orgId, userId);
+      
+      const updateStmt = db.prepare('UPDATE organizations SET updated_at = ? WHERE id = ?');
+      updateStmt.run(new Date().toISOString(), orgId);
+      
+      return true;
+    } catch {
       return false;
     }
-
-    if (!org.memberIds.includes(userId)) {
-      org.memberIds.push(userId);
-      org.updatedAt = new Date();
-    }
-
-    return true;
   }
 
   /**
    * Remove a member from an organization
    */
   public removeMember(orgId: string, userId: string): boolean {
-    const org = database.organizations.find((o) => o.id === orgId);
-    if (!org) {
+    try {
+      const stmt = db.prepare(`
+        DELETE FROM organization_members
+        WHERE organization_id = ? AND user_id = ?
+      `);
+      stmt.run(orgId, userId);
+      
+      const updateStmt = db.prepare('UPDATE organizations SET updated_at = ? WHERE id = ?');
+      updateStmt.run(new Date().toISOString(), orgId);
+      
+      return true;
+    } catch {
       return false;
     }
-
-    const memberIndex = org.memberIds.indexOf(userId);
-    if (memberIndex > -1) {
-      org.memberIds.splice(memberIndex, 1);
-      org.updatedAt = new Date();
-    }
-
-    // Also remove from admins if they were an admin
-    const adminIndex = org.adminIds.indexOf(userId);
-    if (adminIndex > -1) {
-      org.adminIds.splice(adminIndex, 1);
-    }
-
-    return true;
   }
 
   /**
    * Add an admin to an organization
    */
   public addAdmin(orgId: string, userId: string): boolean {
-    const org = database.organizations.find((o) => o.id === orgId);
-    if (!org) {
+    try {
+      // First ensure user is a member
+      this.addMember(orgId, userId);
+      
+      // Then promote to admin
+      const stmt = db.prepare(`
+        UPDATE organization_members
+        SET is_admin = 1
+        WHERE organization_id = ? AND user_id = ?
+      `);
+      stmt.run(orgId, userId);
+      
+      const updateStmt = db.prepare('UPDATE organizations SET updated_at = ? WHERE id = ?');
+      updateStmt.run(new Date().toISOString(), orgId);
+      
+      return true;
+    } catch {
       return false;
     }
-
-    // Ensure user is a member first
-    if (!org.memberIds.includes(userId)) {
-      org.memberIds.push(userId);
-    }
-
-    // Add to admins
-    if (!org.adminIds.includes(userId)) {
-      org.adminIds.push(userId);
-      org.updatedAt = new Date();
-    }
-
-    return true;
   }
 
   /**
    * Remove an admin from an organization
    */
   public removeAdmin(orgId: string, userId: string): boolean {
-    const org = database.organizations.find((o) => o.id === orgId);
-    if (!org) {
+    try {
+      const stmt = db.prepare(`
+        UPDATE organization_members
+        SET is_admin = 0
+        WHERE organization_id = ? AND user_id = ?
+      `);
+      stmt.run(orgId, userId);
+      
+      const updateStmt = db.prepare('UPDATE organizations SET updated_at = ? WHERE id = ?');
+      updateStmt.run(new Date().toISOString(), orgId);
+      
+      return true;
+    } catch {
       return false;
     }
-
-    const adminIndex = org.adminIds.indexOf(userId);
-    if (adminIndex > -1) {
-      org.adminIds.splice(adminIndex, 1);
-      org.updatedAt = new Date();
-    }
-
-    return true;
   }
 
   /**
    * Check if user is an admin of the organization
    */
   public isAdmin(orgId: string, userId: string): boolean {
-    const org = database.organizations.find((o) => o.id === orgId);
-    if (!org) {
-      return false;
-    }
-
-    return org.adminIds.includes(userId);
+    const stmt = db.prepare(`
+      SELECT is_admin FROM organization_members
+      WHERE organization_id = ? AND user_id = ?
+    `);
+    const row = stmt.get(orgId, userId) as any;
+    return row ? row.is_admin === 1 : false;
   }
 
   /**
    * Check if user is a member of the organization
    */
   public isMember(orgId: string, userId: string): boolean {
-    const org = database.organizations.find((o) => o.id === orgId);
-    if (!org) {
-      return false;
-    }
+    const stmt = db.prepare(`
+      SELECT 1 FROM organization_members
+      WHERE organization_id = ? AND user_id = ?
+    `);
+    const row = stmt.get(orgId, userId);
+    return !!row;
+  }
 
-    return org.memberIds.includes(userId);
+  /**
+   * Helper method to map database row to Organization object
+   */
+  private mapRowToOrganization(row: any): Organization {
+    // Get members
+    const membersStmt = db.prepare(`
+      SELECT user_id, is_admin FROM organization_members
+      WHERE organization_id = ?
+    `);
+    const members = membersStmt.all(row.id) as any[];
+
+    const memberIds = members.map(m => m.user_id);
+    const adminIds = members.filter(m => m.is_admin === 1).map(m => m.user_id);
+
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description || '',
+      logo: row.logo,
+      website: row.website,
+      adminIds,
+      memberIds,
+      settings: JSON.parse(row.settings),
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at),
+    };
   }
 }

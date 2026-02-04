@@ -86,7 +86,7 @@ export class OrganizationController {
    * Get all organizations
    * GET /api/organizations
    */
-  public getAllOrganizations = async (req: Request, res: Response): Promise<void> => {
+  public getAllOrganizations = async (_req: Request, res: Response): Promise<void> => {
     try {
       const organizations = this.organizationService.getAllOrganizations();
 

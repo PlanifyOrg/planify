@@ -8,10 +8,12 @@ import { AuthService } from './services/AuthService';
 import { EventService } from './services/EventService';
 import { NotificationService } from './services/NotificationService';
 import { MeetingService } from './services/MeetingService';
+import { OrganizationService } from './services/OrganizationService';
 import { AuthController } from './controllers/AuthController';
 import { EventController } from './controllers/EventController';
 import { NotificationController } from './controllers/NotificationController';
 import { MeetingController } from './controllers/MeetingController';
+import { OrganizationController } from './controllers/OrganizationController';
 import { initializeDatabase } from './utils/database';
 
 // Load environment variables
@@ -25,12 +27,14 @@ const authService = new AuthService();
 const eventService = new EventService();
 const notificationService = new NotificationService();
 const meetingService = new MeetingService();
+const organizationService = new OrganizationService();
 
 // Initialize controllers
 const authController = new AuthController(authService);
 const eventController = new EventController(eventService);
 const notificationController = new NotificationController(notificationService);
 const meetingController = new MeetingController(meetingService);
+const organizationController = new OrganizationController(organizationService);
 
 // Create Express app
 const app: Application = express();
@@ -91,6 +95,18 @@ app.put('/api/meetings/agenda/:agendaItemId/complete', meetingController.complet
 app.post('/api/meetings/:id/documents', meetingController.addDocument);
 app.put('/api/meetings/documents/:documentId', meetingController.updateDocument);
 
+// Organization routes
+app.post('/api/organizations', organizationController.createOrganization);
+app.get('/api/organizations', organizationController.getAllOrganizations);
+app.get('/api/organizations/:id', organizationController.getOrganizationById);
+app.get('/api/organizations/user/:userId', organizationController.getOrganizationsByUserId);
+app.put('/api/organizations/:id', organizationController.updateOrganization);
+app.delete('/api/organizations/:id', organizationController.deleteOrganization);
+app.post('/api/organizations/:id/members', organizationController.addMember);
+app.delete('/api/organizations/:id/members/:userId', organizationController.removeMember);
+app.post('/api/organizations/:id/admins', organizationController.addAdmin);
+app.delete('/api/organizations/:id/admins/:userId', organizationController.removeAdmin);
+
 // 404 handler for API routes
 app.use('/api/*', (_req: Request, res: Response) => {
   res.status(404).json({
@@ -126,6 +142,10 @@ app.listen(PORT, () => {
   console.log('  POST   /api/meetings/:id/documents');
   console.log('  POST   /api/notifications');
   console.log('  GET    /api/notifications/user/:userId');
+  console.log('  POST   /api/organizations');
+  console.log('  GET    /api/organizations');
+  console.log('  GET    /api/organizations/:id');
+  console.log('  GET    /api/organizations/user/:userId');
   console.log('========================================\n');
 });
 

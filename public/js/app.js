@@ -121,6 +121,9 @@ const loadUserData = async () => {
 
     // Load meetings
     await loadMeetingsForUser();
+
+    // Load organization
+    await loadOrganizationData();
   } catch (error) {
     console.error('Failed to load user data:', error);
   }
@@ -743,6 +746,8 @@ Follow-up Required:
   const createEventBtnEmpty = document.getElementById('createEventBtnEmpty');
   const createMeetingBtnEmpty = document.getElementById('createMeetingBtnEmpty');
   const createTaskBtnEmpty = document.getElementById('createTaskBtnEmpty');
+  const createOrganizationBtn = document.getElementById('createOrganizationBtn');
+  const createOrganizationBtnEmpty = document.getElementById('createOrganizationBtnEmpty');
 
   if (createEventBtnEmpty) {
     createEventBtnEmpty.addEventListener('click', () => openEventModal());
@@ -754,6 +759,12 @@ Follow-up Required:
     createTaskBtnEmpty.addEventListener('click', () => {
       showToast('Task creation feature coming soon!', 'info', 'Coming Soon');
     });
+  }
+  if (createOrganizationBtn) {
+    createOrganizationBtn.addEventListener('click', () => openOrganizationModal());
+  }
+  if (createOrganizationBtnEmpty) {
+    createOrganizationBtnEmpty.addEventListener('click', () => openOrganizationModal());
   }
 });
 
@@ -1160,3 +1171,158 @@ async function loadEventsToSelect() {
     showToast('Failed to load events', 'error', 'Error');
   }
 }
+
+// ============================================
+// ORGANIZATION MANAGEMENT
+// ============================================
+
+// Open organization modal
+window.openOrganizationModal = function() {
+  const modal = document.getElementById('organizationModal');
+  if (modal) {
+    modal.classList.add('active');
+    document.getElementById('organizationForm').reset();
+  }
+};
+
+// Close organization modal
+window.closeOrganizationModal = function() {
+  const modal = document.getElementById('organizationModal');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+};
+
+// Submit organization form
+window.submitOrganizationForm = async function() {
+  const form = document.getElementById('organizationForm');
+  const formData = new FormData(form);
+
+  const organizationData = {
+    creatorId: currentUser.id,
+    name: formData.get('name'),
+    description: formData.get('description') || '',
+    website: formData.get('website') || '',
+    logo: formData.get('logo') || '',
+    settings: {
+      allowMemberCreateEvents: formData.get('allowMemberCreateEvents') === 'on',
+      allowMemberInviteUsers: formData.get('allowMemberInviteUsers') === 'on',
+      requireEventApproval: formData.get('requireEventApproval') === 'on',
+      timezone: formData.get('timezone') || 'UTC',
+    }
+  };
+
+  try {
+    const response = await fetch(`${API_URL}/organizations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(organizationData),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('Organization created successfully!', 'success', 'Organization Created');
+      closeOrganizationModal();
+      loadOrganizationData();
+    } else {
+      showToast(data.message || 'Failed to create organization', 'error', 'Creation Failed');
+    }
+  } catch (error) {
+    console.error('Create organization error:', error);
+    showToast('Unable to create organization', 'error', 'Creation Failed');
+  }
+};
+
+// Load organization data
+async function loadOrganizationData() {
+  if (!currentUser) return;
+
+  try {
+    const response = await fetch(`${API_URL}/organizations/user/${currentUser.id}`);
+    const data = await response.json();
+
+    const content = document.getElementById('organizationContent');
+    const empty = document.getElementById('organizationEmpty');
+    const createBtn = document.getElementById('createOrganizationBtn');
+
+    if (data.success && data.data && data.data.length > 0) {
+      const org = data.data[0]; // Get first organization
+      empty.style.display = 'none';
+      content.style.display = 'block';
+      createBtn.style.display = 'none';
+
+      content.innerHTML = `
+        <div class="card" style="margin-bottom: 2rem;">
+          <div style="background: var(--primary-gradient); padding: 2rem; border-radius: var(--radius-lg) var(--radius-lg) 0 0; color: white;">
+            <div style="display: flex; align-items: center; gap: 1.5rem;">
+              ${org.logo ? `<img src="${org.logo}" alt="${org.name}" style="width: 80px; height: 80px; border-radius: var(--radius-lg); background: white; padding: 0.5rem;">` : `<div style="width: 80px; height: 80px; border-radius: var(--radius-lg); background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 2.5rem;">🏢</div>`}
+              <div>
+                <h2 style="margin: 0 0 0.5rem 0; font-size: 2rem;">${org.name}</h2>
+                <p style="margin: 0; opacity: 0.9;">${org.description || 'No description'}</p>
+                ${org.website ? `<a href="${org.website}" target="_blank" style="color: white; opacity: 0.9; text-decoration: none; font-size: 0.875rem;">🔗 ${org.website}</a>` : ''}
+              </div>
+            </div>
+          </div>
+
+          <div style="padding: 2rem;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+              <div style="background: var(--gray-50); padding: 1.5rem; border-radius: var(--radius-lg);">
+                <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">👥</div>
+                <div style="font-size: 0.875rem; color: var(--text-secondary);">Members</div>
+                <div style="font-size: 1.5rem; font-weight: 600;">${org.memberIds.length}</div>
+              </div>
+              <div style="background: var(--gray-50); padding: 1.5rem; border-radius: var(--radius-lg);">
+                <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⭐</div>
+                <div style="font-size: 0.875rem; color: var(--text-secondary);">Admins</div>
+                <div style="font-size: 1.5rem; font-weight: 600;">${org.adminIds.length}</div>
+              </div>
+              <div style="background: var(--gray-50); padding: 1.5rem; border-radius: var(--radius-lg);">
+                <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🌍</div>
+                <div style="font-size: 0.875rem; color: var(--text-secondary);">Timezone</div>
+                <div style="font-size: 1.125rem; font-weight: 600;">${org.settings.timezone}</div>
+              </div>
+            </div>
+
+            <h3 style="margin: 0 0 1rem 0;">Settings</h3>
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+              <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: ${org.settings.allowMemberCreateEvents ? 'rgba(67, 233, 123, 0.1)' : 'var(--gray-50)'}; border-radius: var(--radius-md);">
+                <span>${org.settings.allowMemberCreateEvents ? '✅' : '❌'}</span>
+                <span>Members can create events</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: ${org.settings.allowMemberInviteUsers ? 'rgba(67, 233, 123, 0.1)' : 'var(--gray-50)'}; border-radius: var(--radius-md);">
+                <span>${org.settings.allowMemberInviteUsers ? '✅' : '❌'}</span>
+                <span>Members can invite users</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: ${org.settings.requireEventApproval ? 'rgba(67, 233, 123, 0.1)' : 'var(--gray-50)'}; border-radius: var(--radius-md);">
+                <span>${org.settings.requireEventApproval ? '✅' : '❌'}</span>
+                <span>Event approval required</span>
+              </div>
+            </div>
+
+            <div style="margin-top: 2rem; display: flex; gap: 1rem;">
+              <button class="btn btn-secondary" onclick="editOrganization('${org.id}')">Edit Organization</button>
+              <button class="btn" onclick="manageMembers('${org.id}')">Manage Members</button>
+            </div>
+          </div>
+        </div>
+      `;
+    } else {
+      empty.style.display = 'block';
+      content.style.display = 'none';
+      createBtn.style.display = 'inline-block';
+    }
+  } catch (error) {
+    console.error('Failed to load organization:', error);
+  }
+}
+
+// Placeholder functions for future implementation
+window.editOrganization = function(orgId) {
+  showToast('Edit organization feature coming soon!', 'info', 'Coming Soon');
+};
+
+window.manageMembers = function(orgId) {
+  showToast('Member management feature coming soon!', 'info', 'Coming Soon');
+};
+
