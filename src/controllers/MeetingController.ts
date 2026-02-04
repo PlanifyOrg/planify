@@ -3,6 +3,7 @@
  */
 import { Request, Response } from 'express';
 import { MeetingService } from '../services/MeetingService';
+import { OrganizationService } from '../services/OrganizationService';
 import {
   CreateMeetingDto,
   UpdateMeetingDto,
@@ -12,9 +13,11 @@ import {
 
 export class MeetingController {
   private meetingService: MeetingService;
+  private organizationService: OrganizationService;
 
-  constructor(meetingService: MeetingService) {
+  constructor(meetingService: MeetingService, organizationService: OrganizationService) {
     this.meetingService = meetingService;
+    this.organizationService = organizationService;
   }
 
   /**
@@ -429,18 +432,130 @@ export class MeetingController {
   };
 
   /**
-   * Delete meeting
-   * DELETE /api/meetings/:id
+   * Flag meeting for deletion
+   * POST /api/meetings/:id/flag
    */
-  public deleteMeeting = async (req: Request, res: Response): Promise<void> => {
+  public flagMeeting = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const success = this.meetingService.deleteMeeting(id);
+      const { userId } = req.body;
+
+      if (!userId) {
+        res.status(400).json({
+          success: false,
+          message: 'userId is required',
+        });
+        return;
+      }
+
+      const success = this.meetingService.flagMeetingForDeletion(id, userId);
 
       if (!success) {
         res.status(404).json({
           success: false,
           message: 'Meeting not found',
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Meeting flagged for deletion',
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to flag meeting',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
+  /**
+   * Unflag meeting for deletion
+   * POST /api/meetings/:id/unflag
+   */
+  public unflagMeeting = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const success = this.meetingService.unflagMeetingForDeletion(id);
+
+      if (!success) {
+        res.status(404).json({
+          success: false,
+          message: 'Meeting not found',
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Meeting unflagged',
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to unflag meeting',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
+  /**
+   * Delete meeting (admin only)
+   * DELETE /api/meetings/:id
+   */
+  public deleteMeeting = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const { requesterId } = req.body;
+
+      if (!requesterId) {
+        res.status(400).json({
+          success: false,
+          message: 'requesterId is required',
+        });
+        return;
+      }
+
+      // Get meeting to find organization
+      const meeting = this.meetingService.getMeetingById(id);
+      if (!meeting) {
+        res.status(404).json({
+          success: false,
+          message: 'Meeting not found',
+        });
+        return;
+      }
+
+      // Get event to find organization
+      const eventStmt = require('../utils/database').db.prepare('SELECT organization_id FROM events WHERE id = ?');
+      const event = eventStmt.get(meeting.eventId) as any;
+      
+      if (!event || !event.organization_id) {
+        res.status(400).json({
+          success: false,
+          message: 'Event organization not found',
+        });
+        return;
+      }
+
+      // Check if requester is admin
+      const isAdmin = this.organizationService.isAdmin(event.organization_id, requesterId);
+      if (!isAdmin) {
+        res.status(403).json({
+          success: false,
+          message: 'Only admins can delete meetings',
+        });
+        return;
+      }
+
+      const success = this.meetingService.deleteMeeting(id);
+
+      if (!success) {
+        res.status(404).json({
+          success: false,
+          message: 'Failed to delete meeting',
         });
         return;
       }

@@ -332,6 +332,7 @@ const loadMeetingsForUser = async () => {
           const meetingCard = document.createElement('div');
           meetingCard.className = 'meeting-card';
           meetingCard.innerHTML = `
+            ${meeting.flaggedForDeletion ? '<div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; padding: 0.5rem 1rem; border-radius: var(--radius-md) var(--radius-md) 0 0; font-size: 0.875rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;"><span>⚠️</span> Flagged for Deletion</div>' : ''}
             <h4>📋 ${meeting.title}</h4>
             <div class="meeting-info">
               <span>🗓️ ${new Date(meeting.scheduledTime).toLocaleString()}</span>
@@ -884,7 +885,7 @@ Follow-up Required:
             ` : '<p style="color: #999; text-align: center; padding: 2rem;">No agenda items defined</p>'}
           </div>
 
-          <div style="background: white; padding: 1.5rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);">
+          <div style="background: white; padding: 1.5rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); margin-bottom: 1rem;">
             <h3 style="margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem;">
               <span>📄</span> Documents
             </h3>
@@ -903,13 +904,155 @@ Follow-up Required:
               </div>
             ` : '<p style="color: #999; text-align: center; padding: 2rem;">No documents yet</p>'}
           </div>
+
+          ${meeting.flaggedForDeletion ? `
+            <div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 1.5rem; border-radius: var(--radius-lg); margin-bottom: 1rem; color: white; display: flex; align-items: center; gap: 1rem;">
+              <div style="font-size: 2rem;">⚠️</div>
+              <div style="flex: 1;">
+                <div style="font-weight: 600; font-size: 1.1rem; margin-bottom: 0.25rem;">Flagged for Deletion</div>
+                <div style="opacity: 0.9; font-size: 0.875rem;">This meeting has been flagged for deletion${meeting.flaggedBy ? ` by ${meeting.flaggedBy}` : ''}${meeting.flaggedAt ? ` on ${new Date(meeting.flaggedAt).toLocaleDateString()}` : ''}. Only admins can delete this meeting.</div>
+              </div>
+            </div>
+          ` : ''}
+
+          <div id="meeting-actions-${meeting.id}" style="display: flex; gap: 1rem; justify-content: flex-end; padding-top: 1rem; border-top: 1px solid #e0e0e0;"></div>
         `;
+
+        // Load actions based on user permissions
+        loadMeetingActions(meeting.id, meeting.flaggedForDeletion);
 
         detailModal.classList.add('active');
       }
     } catch (error) {
       console.error('Failed to load meeting details:', error);
       showToast('Unable to load meeting details', 'error', 'Load Failed');
+    }
+  };
+
+  // Load meeting actions based on permissions
+  async function loadMeetingActions(meetingId, isFlagged) {
+    if (!currentUser) return;
+
+    const actionsContainer = document.getElementById(`meeting-actions-${meetingId}`);
+    if (!actionsContainer) return;
+
+    try {
+      // Get user's organization to check if admin
+      const orgResponse = await fetch(`${API_URL}/organizations/user/${currentUser.id}`);
+      const orgData = await orgResponse.json();
+
+      if (!orgData.success || !orgData.data || orgData.data.length === 0) {
+        actionsContainer.innerHTML = '<p style="color: #999; font-size: 0.875rem;">No actions available</p>';
+        return;
+      }
+
+      const org = orgData.data[0];
+      const isAdmin = org.adminIds.includes(currentUser.id);
+
+      let buttonsHtml = '';
+
+      if (isAdmin) {
+        // Admins can delete and unflag
+        buttonsHtml += `<button class="btn btn-danger" onclick="deleteMeeting('${meetingId}')">🗑 Delete Meeting</button>`;
+        if (isFlagged) {
+          buttonsHtml += `<button class="btn btn-secondary" onclick="unflagMeeting('${meetingId}')">Remove Flag</button>`;
+        }
+      } else {
+        // Regular users can only flag
+        if (!isFlagged) {
+          buttonsHtml += `<button class="btn btn-secondary" onclick="flagMeeting('${meetingId}')">🚩 Flag for Deletion</button>`;
+        } else {
+          buttonsHtml += '<span style="color: #999; font-size: 0.875rem;">This meeting is flagged. Only admins can delete it.</span>';
+        }
+      }
+
+      actionsContainer.innerHTML = buttonsHtml;
+    } catch (error) {
+      console.error('Failed to load meeting actions:', error);
+      actionsContainer.innerHTML = '';
+    }
+  }
+
+  // Flag meeting for deletion
+  window.flagMeeting = async function(meetingId) {
+    if (!currentUser) return;
+
+    if (!confirm('Are you sure you want to flag this meeting for deletion? An admin will need to approve the deletion.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/meetings/${meetingId}/flag`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showToast('Meeting flagged for deletion', 'success', 'Flagged');
+        await viewMeetingDetails(meetingId); // Refresh
+        await loadUserData(); // Refresh list
+      } else {
+        showToast(data.message || 'Failed to flag meeting', 'error', 'Error');
+      }
+    } catch (error) {
+      console.error('Flag meeting error:', error);
+      showToast('Unable to flag meeting', 'error', 'Error');
+    }
+  };
+
+  // Unflag meeting
+  window.unflagMeeting = async function(meetingId) {
+    try {
+      const response = await fetch(`${API_URL}/meetings/${meetingId}/unflag`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showToast('Flag removed from meeting', 'success', 'Unflagged');
+        await viewMeetingDetails(meetingId); // Refresh
+        await loadUserData(); // Refresh list
+      } else {
+        showToast(data.message || 'Failed to unflag meeting', 'error', 'Error');
+      }
+    } catch (error) {
+      console.error('Unflag meeting error:', error);
+      showToast('Unable to unflag meeting', 'error', 'Error');
+    }
+  };
+
+  // Delete meeting (admin only)
+  window.deleteMeeting = async function(meetingId) {
+    if (!currentUser) return;
+
+    if (!confirm('Are you sure you want to permanently delete this meeting? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/meetings/${meetingId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requesterId: currentUser.id }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showToast('Meeting deleted successfully', 'success', 'Deleted');
+        closeMeetingDetailModal();
+        await loadUserData(); // Refresh list
+      } else {
+        showToast(data.message || 'Failed to delete meeting', 'error', 'Error');
+      }
+    } catch (error) {
+      console.error('Delete meeting error:', error);
+      showToast('Unable to delete meeting', 'error', 'Error');
     }
   };
 

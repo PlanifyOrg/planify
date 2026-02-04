@@ -34,7 +34,7 @@ const organizationService = new OrganizationService();
 const authController = new AuthController(authService);
 const eventController = new EventController(eventService);
 const notificationController = new NotificationController(notificationService);
-const meetingController = new MeetingController(meetingService);
+const meetingController = new MeetingController(meetingService, organizationService);
 const organizationController = new OrganizationController(organizationService);
 
 // Create Express app
@@ -93,6 +93,8 @@ app.delete('/api/meetings/:id', meetingController.deleteMeeting);
 app.post('/api/meetings/:id/participants', meetingController.addParticipant);
 app.delete('/api/meetings/:id/participants/:userId', meetingController.removeParticipant);
 app.post('/api/meetings/:id/checkin', meetingController.checkInParticipant);
+app.post('/api/meetings/:id/flag', meetingController.flagMeeting);
+app.post('/api/meetings/:id/unflag', meetingController.unflagMeeting);
 app.post('/api/meetings/:id/agenda', meetingController.addAgendaItem);
 app.put('/api/meetings/agenda/:agendaItemId/complete', meetingController.completeAgendaItem);
 app.post('/api/meetings/:id/documents', meetingController.addDocument);
