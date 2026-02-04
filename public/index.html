@@ -61,11 +61,14 @@
       <!-- Navigation Tabs -->
       <nav class="nav-tabs">
         <div class="container">
-          <button class="active" data-tab="events">Events</button>
+          <button data-tab="events">Events</button>
           <button data-tab="meetings">Meetings</button>
           <button data-tab="tasks">Tasks</button>
           <button data-tab="organization">Organization</button>
-          <button data-tab="notifications">Notifications</button>
+          <button data-tab="notifications" style="position: relative;">
+            Notifications
+            <span id="notificationBadge" style="display: none; position: absolute; top: 8px; right: 8px; background: #ff4757; color: white; border-radius: 10px; padding: 2px 6px; font-size: 0.75rem; font-weight: 600; min-width: 18px; text-align: center;"></span>
+          </button>
         </div>
       </nav>
 

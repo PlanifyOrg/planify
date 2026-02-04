@@ -421,6 +421,21 @@ header h1 {
   border-bottom-color: var(--primary-color);
 }
 
+/* Notification Badge */
+#notificationBadge {
+  animation: badge-pulse 2s ease-in-out infinite;
+  box-shadow: 0 2px 8px rgba(255, 71, 87, 0.4);
+}
+
+@keyframes badge-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
 .content-section {
   display: none;
   padding: var(--spacing-2xl) 0;

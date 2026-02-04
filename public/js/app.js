@@ -444,8 +444,22 @@ const displayEvents = (events) => {
 const displayNotifications = (notifications) => {
   const notificationList = document.getElementById('notificationsList');
   const emptyState = document.getElementById('notificationsEmpty');
+  const badge = document.getElementById('notificationBadge');
   
   if (!notificationList) return;
+
+  // Count unread notifications
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+  
+  // Update badge
+  if (badge) {
+    if (unreadCount > 0) {
+      badge.textContent = unreadCount > 99 ? '99+' : unreadCount.toString();
+      badge.style.display = 'block';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
 
   if (notifications.length === 0) {
     notificationList.innerHTML = '';
@@ -513,7 +527,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Tab navigation
   const tabButtons = document.querySelectorAll('.nav-tabs button');
   tabButtons.forEach(button => {
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
       const tab = button.getAttribute('data-tab');
       
       // Update active button
@@ -526,6 +540,22 @@ document.addEventListener('DOMContentLoaded', () => {
       const activeSection = document.getElementById(`${tab}Section`);
       if (activeSection) {
         activeSection.classList.add('active');
+      }
+
+      // Mark all notifications as read when viewing notifications tab
+      if (tab === 'notifications' && currentUser) {
+        try {
+          await fetch(`${API_URL}/notifications/user/${currentUser.id}/read-all`, {
+            method: 'PUT',
+          });
+          // Update badge immediately
+          const badge = document.getElementById('notificationBadge');
+          if (badge) {
+            badge.style.display = 'none';
+          }
+        } catch (error) {
+          console.error('Failed to mark notifications as read:', error);
+        }
       }
     });
   });
