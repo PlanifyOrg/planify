@@ -14,6 +14,7 @@ export interface Meeting {
   status: MeetingStatus;
   flaggedForDeletion: boolean;
   flaggedBy?: string;
+  flaggedByUsername?: string;
   flaggedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -21,6 +22,7 @@ export interface Meeting {
 
 export interface MeetingParticipant {
   userId: string;
+  username?: string;
   checkedIn: boolean;
   checkedInAt?: Date;
 }
@@ -40,6 +42,7 @@ export interface MeetingDocument {
   content: string;
   type: DocumentType;
   createdBy: string;
+  createdByUsername?: string;
   createdAt: Date;
   updatedAt: Date;
 }

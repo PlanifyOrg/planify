@@ -871,7 +871,8 @@ Follow-up Required:
             </h3>
             <div style="display: flex; flex-direction: column; gap: 0.75rem;">
               ${meeting.participants.map(p => {
-                const initial = p.userId.charAt(0).toUpperCase();
+                const username = p.username || p.userId;
+                const initial = username.charAt(0).toUpperCase();
                 const isCurrentUser = p.userId === currentUser.id;
                 return `
                   <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: ${p.checkedIn ? 'linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%)' : '#f8f9fa'}; border-radius: var(--radius-md); border: 2px solid ${p.checkedIn ? '#96e6a1' : '#e0e0e0'};">
@@ -880,7 +881,7 @@ Follow-up Required:
                         ${initial}
                       </div>
                       <div>
-                        <div style="font-weight: 600;">${p.userId}${isCurrentUser ? ' (You)' : ''}</div>
+                        <div style="font-weight: 600;">${username}${isCurrentUser ? ' (You)' : ''}</div>
                         ${p.checkedIn && p.checkedInAt ? `<div style="font-size: 0.875rem; color: #666;">✓ Checked in at ${new Date(p.checkedInAt).toLocaleTimeString()}</div>` : '<div style="font-size: 0.875rem; color: #999;">Not checked in yet</div>'}
                       </div>
                     </div>
@@ -933,7 +934,7 @@ Follow-up Required:
                       <span style="padding: 0.25rem 0.75rem; background: var(--primary-gradient); color: white; border-radius: var(--radius-full); font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">${doc.type}</span>
                     </div>
                     <div style="color: #666; line-height: 1.6; margin-bottom: 0.75rem;">${doc.content}</div>
-                    <div style="font-size: 0.875rem; color: #999;">Created by ${doc.createdBy} • ${new Date(doc.createdAt).toLocaleString()}</div>
+                    <div style="font-size: 0.875rem; color: #999;">Created by ${doc.createdByUsername || doc.createdBy} • ${new Date(doc.createdAt).toLocaleString()}</div>
                   </div>
                 `).join('')}
               </div>
@@ -945,7 +946,7 @@ Follow-up Required:
               <div style="font-size: 2rem;">⚠️</div>
               <div style="flex: 1;">
                 <div style="font-weight: 600; font-size: 1.1rem; margin-bottom: 0.25rem;">Flagged for Deletion</div>
-                <div style="opacity: 0.9; font-size: 0.875rem;">This meeting has been flagged for deletion${meeting.flaggedBy ? ` by ${meeting.flaggedBy}` : ''}${meeting.flaggedAt ? ` on ${new Date(meeting.flaggedAt).toLocaleDateString()}` : ''}. Only admins can delete this meeting.</div>
+                <div style="opacity: 0.9; font-size: 0.875rem;">This meeting has been flagged for deletion${meeting.flaggedByUsername ? ` by ${meeting.flaggedByUsername}` : (meeting.flaggedBy ? ` by ${meeting.flaggedBy}` : '')}${meeting.flaggedAt ? ` on ${new Date(meeting.flaggedAt).toLocaleDateString()}` : ''}. Only admins can delete this meeting.</div>
               </div>
             </div>
           ` : ''}

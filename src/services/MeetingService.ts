@@ -83,15 +83,17 @@ export class MeetingService {
       return undefined;
     }
 
-    // Get participants with check-in status
+    // Get participants with check-in status and usernames
     const participantsStmt = db.prepare(`
-      SELECT user_id, checked_in, checked_in_at 
-      FROM meeting_participants 
-      WHERE meeting_id = ?
+      SELECT mp.user_id, mp.checked_in, mp.checked_in_at, u.username
+      FROM meeting_participants mp
+      LEFT JOIN users u ON mp.user_id = u.id
+      WHERE mp.meeting_id = ?
     `);
     const participantRows = participantsStmt.all(meetingId) as any[];
     const participants: MeetingParticipant[] = participantRows.map(p => ({
       userId: p.user_id,
+      username: p.username || 'Unknown User',
       checkedIn: p.checked_in === 1,
       checkedInAt: p.checked_in_at ? new Date(p.checked_in_at) : undefined,
     }));
@@ -114,9 +116,11 @@ export class MeetingService {
 
     // Get documents
     const documentsStmt = db.prepare(`
-      SELECT * FROM meeting_documents 
-      WHERE meeting_id = ? 
-      ORDER BY created_at DESC
+      SELECT md.*, u.username as created_by_username
+      FROM meeting_documents md
+      LEFT JOIN users u ON md.created_by = u.id
+      WHERE md.meeting_id = ? 
+      ORDER BY md.created_at DESC
     `);
     const documentRows = documentsStmt.all(meetingId) as any[];
     const documents: MeetingDocument[] = documentRows.map(d => ({
@@ -125,9 +129,18 @@ export class MeetingService {
       content: d.content,
       type: d.type,
       createdBy: d.created_by,
+      createdByUsername: d.created_by_username || 'Unknown User',
       createdAt: new Date(d.created_at),
       updatedAt: new Date(d.updated_at),
     }));
+
+    // Get flaggedBy username if meeting is flagged
+    let flaggedByUsername: string | undefined = undefined;
+    if (row.flagged_by) {
+      const userStmt = db.prepare('SELECT username FROM users WHERE id = ?');
+      const userRow = userStmt.get(row.flagged_by) as any;
+      flaggedByUsername = userRow?.username || 'Unknown User';
+    }
 
     return {
       id: row.id,
@@ -142,6 +155,7 @@ export class MeetingService {
       status: row.status as MeetingStatus,
       flaggedForDeletion: row.flagged_for_deletion === 1,
       flaggedBy: row.flagged_by || undefined,
+      flaggedByUsername,
       flaggedAt: row.flagged_at ? new Date(row.flagged_at) : undefined,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
