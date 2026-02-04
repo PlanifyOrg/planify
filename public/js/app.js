@@ -1657,6 +1657,9 @@ async function loadOrganizationMembers(orgId) {
 
       const members = await Promise.all(memberPromises);
 
+      // Check if current user is an admin
+      const isCurrentUserAdmin = currentUser && org.adminIds.includes(currentUser.id);
+
       membersList.innerHTML = members.map(member => `
         <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: white; border-radius: var(--radius-md); box-shadow: var(--shadow-sm);">
           <div style="display: flex; align-items: center; gap: 1rem;">
@@ -1671,10 +1674,12 @@ async function loadOrganizationMembers(orgId) {
               <div style="font-size: 0.75rem; color: var(--text-secondary); font-family: monospace;">${member.id}</div>
             </div>
           </div>
-          <div style="display: flex; gap: 0.5rem;">
-            ${!member.isAdmin ? `<button class="btn btn-sm btn-secondary" onclick="promoteToAdmin('${member.id}')">Make Admin</button>` : `<button class="btn btn-sm btn-secondary" onclick="demoteAdmin('${member.id}')">Remove Admin</button>`}
-            <button class="btn btn-sm btn-danger" onclick="removeMemberFromOrg('${member.id}', '${member.username}')">Remove</button>
-          </div>
+          ${isCurrentUserAdmin ? `
+            <div style="display: flex; gap: 0.5rem;">
+              ${!member.isAdmin ? `<button class="btn btn-sm btn-secondary" onclick="promoteToAdmin('${member.id}')">Make Admin</button>` : `<button class="btn btn-sm btn-secondary" onclick="demoteAdmin('${member.id}')">Remove Admin</button>`}
+              <button class="btn btn-sm btn-danger" onclick="removeMemberFromOrg('${member.id}', '${member.username}')">Remove</button>
+            </div>
+          ` : ''}
         </div>
       `).join('');
     }
@@ -1749,13 +1754,13 @@ window.removeMemberFromOrg = async function(userId, username) {
 
 // Promote user to admin
 window.promoteToAdmin = async function(userId) {
-  if (!currentOrgId) return;
+  if (!currentOrgId || !currentUser) return;
 
   try {
     const response = await fetch(`${API_URL}/organizations/${currentOrgId}/admins`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId }),
+      body: JSON.stringify({ userId, requesterId: currentUser.id }),
     });
 
     const data = await response.json();
@@ -1775,11 +1780,13 @@ window.promoteToAdmin = async function(userId) {
 
 // Demote admin
 window.demoteAdmin = async function(userId) {
-  if (!currentOrgId) return;
+  if (!currentOrgId || !currentUser) return;
 
   try {
     const response = await fetch(`${API_URL}/organizations/${currentOrgId}/admins/${userId}`, {
       method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requesterId: currentUser.id }),
     });
 
     const data = await response.json();

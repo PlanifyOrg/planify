@@ -266,12 +266,21 @@ export class OrganizationController {
   public addAdmin = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const { userId } = req.body;
+      const { userId, requesterId } = req.body;
 
-      if (!userId) {
+      if (!userId || !requesterId) {
         res.status(400).json({
           success: false,
-          message: 'userId is required',
+          message: 'userId and requesterId are required',
+        });
+        return;
+      }
+
+      // Check if requester is an admin
+      if (!this.organizationService.isAdmin(id, requesterId)) {
+        res.status(403).json({
+          success: false,
+          message: 'Only admins can promote members to admin',
         });
         return;
       }
@@ -306,6 +315,24 @@ export class OrganizationController {
   public removeAdmin = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id, userId } = req.params;
+      const { requesterId } = req.body;
+
+      if (!requesterId) {
+        res.status(400).json({
+          success: false,
+          message: 'requesterId is required',
+        });
+        return;
+      }
+
+      // Check if requester is an admin
+      if (!this.organizationService.isAdmin(id, requesterId)) {
+        res.status(403).json({
+          success: false,
+          message: 'Only admins can demote other admins',
+        });
+        return;
+      }
 
       const success = this.organizationService.removeAdmin(id, userId);
 
