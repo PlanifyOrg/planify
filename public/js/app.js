@@ -1,6 +1,8 @@
 // Client-side application logic
 const API_URL = 'http://localhost:3000/api';
 let currentUser = null;
+let eventParticipants = [];
+let eventParticipantUsernames = {};
 
 // Toast Notification System
 const showToast = (message, type = 'info', title = '') => {
@@ -369,17 +371,31 @@ const displayEvents = (events) => {
 
   if (emptyState) emptyState.style.display = 'none';
   
-  eventList.innerHTML = events.map(event => `
+  eventList.innerHTML = events.map(event => {
+    const startDate = new Date(event.startDate);
+    const endDate = new Date(event.endDate);
+    const duration = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24));
+    const isSameDay = startDate.toDateString() === endDate.toDateString();
+    
+    return `
     <div class="event-card">
       <div class="event-card-header">
         <h3>${event.title}</h3>
-        <div class="event-date">📅 ${new Date(event.startDate).toLocaleDateString()}</div>
+        <div class="event-date">
+          ${isSameDay 
+            ? `📅 ${startDate.toLocaleDateString()}`
+            : `📅 ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`
+          }
+        </div>
       </div>
       <div class="event-card-body">
         <p class="event-description">${event.description || 'No description'}</p>
         <div class="event-meta">
           <div class="meta-item">
             <span>📍 <strong>Location:</strong> ${event.location}</span>
+          </div>
+          <div class="meta-item">
+            <span>⏱️ <strong>Duration:</strong> ${duration === 0 ? 'Same day' : `${duration} ${duration === 1 ? 'day' : 'days'}`}</span>
           </div>
           <div class="meta-item">
             <span>👥 <strong>Participants:</strong> ${event.participants.length}</span>
@@ -394,7 +410,8 @@ const displayEvents = (events) => {
         <button class="btn btn-sm" onclick="viewEvent('${event.id}')">View Details</button>
       </div>
     </div>
-  `).join('');
+    `;
+  }).join('');
 };
 
 // Display notifications
@@ -939,8 +956,24 @@ window.openEventModal = function() {
   const modal = document.getElementById('eventModal');
   if (modal) {
     modal.classList.add('active');
-    // Reset form
     document.getElementById('eventForm').reset();
+    eventParticipants = [];
+    eventParticipantUsernames = {};
+    document.getElementById('eventParticipantsList').innerHTML = '';
+    document.getElementById('eventParticipantSearchResults').style.display = 'none';
+    
+    // Set default end date to 1 hour after start when start changes
+    const startInput = document.querySelector('[name="startDate"]');
+    const endInput = document.querySelector('[name="endDate"]');
+    if (startInput && endInput) {
+      startInput.addEventListener('change', function() {
+        if (!endInput.value && startInput.value) {
+          const startDate = new Date(startInput.value);
+          startDate.setHours(startDate.getHours() + 1);
+          endInput.value = startDate.toISOString().slice(0, 16);
+        }
+      });
+    }
   }
 };
 
@@ -955,6 +988,19 @@ window.submitEventForm = async function() {
   const form = document.getElementById('eventForm');
   const formData = new FormData(form);
   
+  const startDate = formData.get('startDate');
+  const endDate = formData.get('endDate');
+
+  if (!startDate || !endDate) {
+    showToast('Please select both start and end dates', 'warning', 'Missing Information');
+    return;
+  }
+
+  if (new Date(endDate) < new Date(startDate)) {
+    showToast('End date must be after start date', 'warning', 'Invalid Date Range');
+    return;
+  }
+  
   try {
     const response = await fetch(`${API_URL}/events`, {
       method: 'POST',
@@ -964,14 +1010,26 @@ window.submitEventForm = async function() {
         title: formData.get('title'),
         description: formData.get('description'),
         location: formData.get('location'),
-        startDate: new Date(formData.get('date')),
-        endDate: new Date(formData.get('date')),
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
       }),
     });
 
     const data = await response.json();
 
     if (data.success) {
+      // Add participants if any
+      if (eventParticipants.length > 0) {
+        const eventId = data.data.id;
+        for (const participantId of eventParticipants) {
+          await fetch(`${API_URL}/events/${eventId}/participants`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: participantId }),
+          });
+        }
+      }
+
       showToast('Event created successfully!', 'success', 'Event Created');
       closeEventModal();
       loadUserData();
@@ -1231,8 +1289,26 @@ window.editEvent = async function(eventId) {
       
       // Format dates for datetime-local input
       const startDate = new Date(event.startDate);
-      const formattedDate = startDate.toISOString().slice(0, 16);
-      form.elements['date'].value = formattedDate;
+      const endDate = new Date(event.endDate);
+      form.elements['startDate'].value = startDate.toISOString().slice(0, 16);
+      form.elements['endDate'].value = endDate.toISOString().slice(0, 16);
+
+      // Load participants with usernames
+      eventParticipants = [...event.participants];
+      eventParticipantUsernames = {};
+      
+      // Fetch usernames for existing participants
+      for (const participantId of eventParticipants) {
+        try {
+          const userResponse = await fetch(`${API_URL}/auth/user/${participantId}`);
+          const userData = await userResponse.json();
+          eventParticipantUsernames[participantId] = userData.data?.username || 'Unknown User';
+        } catch {
+          eventParticipantUsernames[participantId] = 'Unknown User';
+        }
+      }
+      
+      renderEventParticipants();
 
       modal.classList.add('active');
     } else {
@@ -1249,12 +1325,21 @@ window.updateEventForm = async function(eventId) {
   const form = document.getElementById('eventForm');
   const formData = new FormData(form);
   
-  const dateValue = formData.get('date');
-  const startDate = new Date(dateValue);
-  const endDate = new Date(startDate);
-  endDate.setHours(startDate.getHours() + 2); // Default 2 hour duration
+  const startDate = formData.get('startDate');
+  const endDate = formData.get('endDate');
+
+  if (!startDate || !endDate) {
+    showToast('Please select both start and end dates', 'warning', 'Missing Information');
+    return;
+  }
+
+  if (new Date(endDate) < new Date(startDate)) {
+    showToast('End date must be after start date', 'warning', 'Invalid Date Range');
+    return;
+  }
 
   try {
+    // Update event details
     const response = await fetch(`${API_URL}/events/${eventId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -1262,14 +1347,40 @@ window.updateEventForm = async function(eventId) {
         title: formData.get('title'),
         description: formData.get('description'),
         location: formData.get('location'),
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
       }),
     });
 
     const data = await response.json();
 
     if (data.success) {
+      // Get current event to compare participants
+      const eventResponse = await fetch(`${API_URL}/events/${eventId}`);
+      const eventData = await eventResponse.json();
+      
+      if (eventData.success && eventData.data) {
+        const currentParticipants = eventData.data.participants;
+        
+        // Add new participants
+        const participantsToAdd = eventParticipants.filter(p => !currentParticipants.includes(p));
+        for (const participantId of participantsToAdd) {
+          await fetch(`${API_URL}/events/${eventId}/participants`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: participantId }),
+          });
+        }
+        
+        // Remove participants that were deleted
+        const participantsToRemove = currentParticipants.filter(p => !eventParticipants.includes(p));
+        for (const participantId of participantsToRemove) {
+          await fetch(`${API_URL}/events/${eventId}/participants/${participantId}`, {
+            method: 'DELETE',
+          });
+        }
+      }
+
       showToast('Event updated successfully!', 'success', 'Event Updated');
       closeEventModal();
       resetEventModal();
@@ -1910,4 +2021,134 @@ window.rejectJoinRequest = async function(requestId) {
     showToast('Unable to reject request', 'error', 'Error');
   }
 };
+
+// Search for organization members to add as participants
+window.searchEventParticipants = async function() {
+  const searchInput = document.getElementById('eventParticipantSearch');
+  const searchValue = searchInput.value.trim();
+
+  if (!searchValue) {
+    showToast('Please enter a username or user ID', 'warning', 'Missing Information');
+    return;
+  }
+
+  if (!currentUser) return;
+
+  try {
+    // Get user's organizations
+    const orgResponse = await fetch(`${API_URL}/organizations/user/${currentUser.id}`);
+    const orgData = await orgResponse.json();
+
+    if (!orgData.success || !orgData.data || orgData.data.length === 0) {
+      showToast('You must be in an organization to add participants', 'warning', 'No Organization');
+      return;
+    }
+
+    const org = orgData.data[0];
+
+    // Fetch user details for all organization members
+    const memberPromises = org.memberIds.map(async (userId) => {
+      try {
+        const userResponse = await fetch(`${API_URL}/auth/user/${userId}`);
+        const userData = await userResponse.json();
+        return {
+          id: userId,
+          username: userData.data?.username || 'Unknown User',
+        };
+      } catch {
+        return { id: userId, username: 'Unknown User' };
+      }
+    });
+
+    const members = await Promise.all(memberPromises);
+
+    // Filter members based on search
+    const results = members.filter(member => 
+      member.id.toLowerCase().includes(searchValue.toLowerCase()) ||
+      member.username.toLowerCase().includes(searchValue.toLowerCase())
+    );
+
+    const resultsContainer = document.getElementById('eventParticipantSearchResults');
+    const resultsList = document.getElementById('eventParticipantResultsList');
+
+    if (results.length === 0) {
+      resultsList.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 1rem;">No members found</p>';
+      resultsContainer.style.display = 'block';
+      return;
+    }
+
+    resultsList.innerHTML = results.map(member => `
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: white; border-radius: var(--radius-md); margin-bottom: 0.5rem; ${eventParticipants.includes(member.id) ? 'opacity: 0.5;' : ''}">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 32px; height: 32px; border-radius: var(--radius-full); background: var(--primary-gradient); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.875rem;">
+            ${member.username.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div style="font-weight: 600; font-size: 0.875rem;">${member.username}</div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); font-family: monospace;">${member.id}</div>
+          </div>
+        </div>
+        ${!eventParticipants.includes(member.id) 
+          ? `<button type="button" class="btn btn-sm" onclick="addEventParticipantById('${member.id}', '${member.username}')">Add</button>`
+          : '<span style="font-size: 0.875rem; color: var(--text-secondary);">Already added</span>'
+        }
+      </div>
+    `).join('');
+
+    resultsContainer.style.display = 'block';
+  } catch (error) {
+    console.error('Search participants error:', error);
+    showToast('Failed to search participants', 'error', 'Error');
+  }
+};
+
+// Add participant by ID and username
+window.addEventParticipantById = function(userId, username) {
+  if (eventParticipants.includes(userId)) {
+    showToast('User already added', 'warning', 'Duplicate');
+    return;
+  }
+
+  eventParticipants.push(userId);
+  eventParticipantUsernames[userId] = username;
+
+  renderEventParticipants();
+  searchEventParticipants(); // Refresh search results
+  showToast(`${username} added to event`, 'success', 'Participant Added');
+};
+
+// Remove participant from event
+window.removeEventParticipant = function(userId) {
+  eventParticipants = eventParticipants.filter(id => id !== userId);
+  renderEventParticipants();
+};
+
+// Render event participants list
+function renderEventParticipants() {
+  const list = document.getElementById('eventParticipantsList');
+  if (!list) return;
+
+  if (eventParticipants.length === 0) {
+    list.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 1rem;">No participants added yet</p>';
+    return;
+  }
+
+  list.innerHTML = eventParticipants.map(userId => {
+    const username = eventParticipantUsernames[userId] || 'Unknown';
+    return `
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: white; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <div style="width: 32px; height: 32px; border-radius: var(--radius-full); background: var(--primary-gradient); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.875rem;">
+          ${username.charAt(0).toUpperCase()}
+        </div>
+        <div>
+          <div style="font-weight: 600; font-size: 0.875rem;">${username}</div>
+          <div style="font-size: 0.75rem; color: var(--text-secondary); font-family: monospace;">${userId}</div>
+        </div>
+      </div>
+      <button class="btn btn-sm btn-danger" onclick="removeEventParticipant('${userId}')">Remove</button>
+    </div>
+    `;
+  }).join('');
+}
 

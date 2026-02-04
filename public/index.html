@@ -163,7 +163,7 @@
          ============================================ -->
     
     <!-- Event Modal -->
-    <div id="eventModal" class="modal">
+    <div id="eventModal" class="modal modal-large">
       <div class="modal-content">
         <div class="modal-header">
           <h2>Create Event</h2>
@@ -171,21 +171,46 @@
         </div>
         <div class="modal-body">
           <form id="eventForm">
-            <div class="form-group">
-              <label>Event Title</label>
-              <input type="text" name="title" placeholder="Enter event name" required>
+            <div class="form-section">
+              <h3>🎯 Basic Information</h3>
+              <div class="form-group">
+                <label>Event Title</label>
+                <input type="text" name="title" placeholder="Enter event name" required>
+              </div>
+              <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" placeholder="Describe your event" rows="3" required></textarea>
+              </div>
+              <div class="form-inline">
+                <div class="form-group" style="flex: 1;">
+                  <label>Start Date & Time</label>
+                  <input type="datetime-local" name="startDate" required>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                  <label>End Date & Time</label>
+                  <input type="datetime-local" name="endDate" required>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Location</label>
+                <input type="text" name="location" placeholder="Event location" required>
+              </div>
             </div>
-            <div class="form-group">
-              <label>Description</label>
-              <textarea name="description" placeholder="Describe your event" rows="3" required></textarea>
-            </div>
-            <div class="form-group">
-              <label>Date & Time</label>
-              <input type="datetime-local" name="date" required>
-            </div>
-            <div class="form-group">
-              <label>Location</label>
-              <input type="text" name="location" placeholder="Event location" required>
+
+            <div class="form-section">
+              <h3>👥 Participants</h3>
+              <div class="form-inline">
+                <div class="form-group" style="flex: 1;">
+                  <input type="text" id="eventParticipantSearch" placeholder="Search by username or ID">
+                </div>
+                <button type="button" class="btn" onclick="searchEventParticipants()">🔍 Search</button>
+              </div>
+              <div id="eventParticipantSearchResults" style="display: none; margin-top: 1rem; max-height: 200px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.5rem;">
+                <div id="eventParticipantResultsList"></div>
+              </div>
+              <div id="eventParticipantsList" style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem;">
+                <!-- Participants will be added here -->
+              </div>
             </div>
           </form>
         </div>

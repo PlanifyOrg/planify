@@ -69,6 +69,7 @@ app.get('/api/events/:id', eventController.getEventById);
 app.get('/api/events/user/:userId', eventController.getEventsByUserId);
 app.put('/api/events/:id', eventController.updateEvent);
 app.post('/api/events/:id/participants', eventController.addParticipant);
+app.delete('/api/events/:id/participants/:userId', eventController.removeParticipant);
 app.delete('/api/events/:id', eventController.deleteEvent);
 
 // Notification routes

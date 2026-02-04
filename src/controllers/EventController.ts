@@ -200,6 +200,40 @@ export class EventController {
   };
 
   /**
+   * Remove participant from event
+   * DELETE /api/events/:id/participants/:userId
+   */
+  public removeParticipant = async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const { id, userId } = req.params;
+
+      const success = this.eventService.removeParticipant(id, userId);
+
+      if (!success) {
+        res.status(400).json({
+          success: false,
+          message: 'Failed to remove participant',
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Participant removed successfully',
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to remove participant',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
+  /**
    * Delete an event
    * DELETE /api/events/:id
    */
