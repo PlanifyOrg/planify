@@ -631,7 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function renderParticipants() {
+  window.renderParticipants = function() {
     if (!participantsList) return;
     
     if (meetingParticipants.length === 0) {
@@ -656,7 +656,7 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
       `;
     }).join('');
-  }
+  };
 
   window.removeMeetingParticipant = function(userId) {
     meetingParticipants = meetingParticipants.filter(id => id !== userId);
