@@ -14,6 +14,7 @@ import { EventController } from './controllers/EventController';
 import { NotificationController } from './controllers/NotificationController';
 import { MeetingController } from './controllers/MeetingController';
 import { OrganizationController } from './controllers/OrganizationController';
+import { JoinRequestController } from './controllers/JoinRequestController';
 import { initializeDatabase } from './utils/database';
 
 // Load environment variables
@@ -106,6 +107,12 @@ app.post('/api/organizations/:id/members', organizationController.addMember);
 app.delete('/api/organizations/:id/members/:userId', organizationController.removeMember);
 app.post('/api/organizations/:id/admins', organizationController.addAdmin);
 app.delete('/api/organizations/:id/admins/:userId', organizationController.removeAdmin);
+
+// Join request routes
+app.post('/api/organizations/:organizationId/join-requests', JoinRequestController.createJoinRequest);
+app.get('/api/organizations/:organizationId/join-requests', JoinRequestController.getPendingRequests);
+app.post('/api/join-requests/:requestId/approve', JoinRequestController.approveJoinRequest);
+app.post('/api/join-requests/:requestId/reject', JoinRequestController.rejectJoinRequest);
 
 // 404 handler for API routes
 app.use('/api/*', (_req: Request, res: Response) => {

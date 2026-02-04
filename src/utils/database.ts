@@ -44,6 +44,22 @@ export function initializeDatabase(): void {
     )
   `);
 
+  // Join requests table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS join_requests (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      reviewed_at DATETIME,
+      reviewed_by TEXT,
+      FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL
+    )
+  `);
+
   // Users table
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (

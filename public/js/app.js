@@ -241,7 +241,7 @@ window.requestJoinOrganization = async function(orgId, orgName) {
   if (!currentUser) return;
 
   try {
-    const response = await fetch(`${API_URL}/organizations/${orgId}/members`, {
+    const response = await fetch(`${API_URL}/organizations/${orgId}/join-requests`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: currentUser.id }),
@@ -250,24 +250,17 @@ window.requestJoinOrganization = async function(orgId, orgName) {
     const data = await response.json();
 
     if (data.success) {
-      showToast(`Successfully joined ${orgName}!`, 'success', 'Joined Organization');
+      showToast(`Join request sent to ${orgName}! Please wait for admin approval.`, 'success', 'Request Sent');
       
-      // Close modals and enable navigation
-      const requiredModal = document.getElementById('orgRequiredModal');
-      if (requiredModal) {
-        requiredModal.classList.remove('active');
-      }
-      
-      enableNavigation();
-      
-      // Reload user data
-      await checkUserOrganization();
+      // Clear search
+      document.getElementById('joinOrgSearch').value = '';
+      document.getElementById('orgSearchResults').style.display = 'none';
     } else {
-      showToast(data.message || 'Failed to join organization', 'error', 'Failed');
+      showToast(data.message || 'Failed to send join request', 'error', 'Failed');
     }
   } catch (error) {
-    console.error('Join organization error:', error);
-    showToast('Unable to join organization', 'error', 'Error');
+    console.error('Join request error:', error);
+    showToast('Unable to send join request', 'error', 'Error');
   }
 };
 
@@ -1634,6 +1627,10 @@ async function loadOrganizationMembers(orgId) {
 
     if (data.success && data.data) {
       const org = data.data;
+      
+      // Load pending join requests
+      await loadJoinRequests(orgId);
+      
       const membersList = document.getElementById('membersList');
       
       if (!membersList) return;
@@ -1666,11 +1663,13 @@ async function loadOrganizationMembers(orgId) {
             <div style="width: 40px; height: 40px; border-radius: var(--radius-full); background: var(--primary-gradient); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600;">
               ${member.username.charAt(0).toUpperCase()}
             </div>
-            <div>
-              <div style="font-weight: 600;">${member.username}</div>
-              <div style="font-size: 0.875rem; color: var(--text-secondary);">${member.id}</div>
+            <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-weight: 600;">${member.username}</span>
+                ${member.isAdmin ? '<span style="display: inline-flex; align-items: center; padding: 0.25rem 0.75rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: var(--radius-full); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">👑 Admin</span>' : ''}
+              </div>
+              <div style="font-size: 0.75rem; color: var(--text-secondary); font-family: monospace;">${member.id}</div>
             </div>
-            ${member.isAdmin ? '<span class="badge" style="background: var(--primary-gradient); color: white; margin-left: 0.5rem;">Admin</span>' : ''}
           </div>
           <div style="display: flex; gap: 0.5rem;">
             ${!member.isAdmin ? `<button class="btn btn-sm btn-secondary" onclick="promoteToAdmin('${member.id}')">Make Admin</button>` : `<button class="btn btn-sm btn-secondary" onclick="demoteAdmin('${member.id}')">Remove Admin</button>`}
@@ -1795,6 +1794,113 @@ window.demoteAdmin = async function(userId) {
   } catch (error) {
     console.error('Demote admin error:', error);
     showToast('Unable to demote admin', 'error', 'Error');
+  }
+};
+
+// Load join requests for organization
+async function loadJoinRequests(orgId) {
+  try {
+    const response = await fetch(`${API_URL}/organizations/${orgId}/join-requests`);
+    const data = await response.json();
+
+    const requestsList = document.getElementById('joinRequestsList');
+    if (!requestsList) return;
+
+    if (!data.success || !data.data || data.data.length === 0) {
+      requestsList.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">No pending requests</p>';
+      return;
+    }
+
+    // Fetch user details for each request
+    const requestPromises = data.data.map(async (request) => {
+      try {
+        const userResponse = await fetch(`${API_URL}/auth/user/${request.userId}`);
+        const userData = await userResponse.json();
+        return {
+          ...request,
+          username: userData.data?.username || 'Unknown User',
+        };
+      } catch {
+        return { ...request, username: 'Unknown User' };
+      }
+    });
+
+    const requests = await Promise.all(requestPromises);
+
+    requestsList.innerHTML = requests.map(request => `
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: var(--radius-md); border-left: 4px solid #f59e0b;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <div style="width: 40px; height: 40px; border-radius: var(--radius-full); background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600;">
+            ${request.username.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div style="font-weight: 600;">${request.username}</div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); font-family: monospace;">${request.userId}</div>
+            <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.25rem;">Requested ${new Date(request.requestedAt).toLocaleDateString()}</div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn btn-sm" onclick="approveJoinRequest('${request.id}')" style="background: var(--success-gradient);">✓ Approve</button>
+          <button class="btn btn-sm btn-danger" onclick="rejectJoinRequest('${request.id}')">✗ Reject</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (error) {
+    console.error('Failed to load join requests:', error);
+  }
+}
+
+// Approve join request
+window.approveJoinRequest = async function(requestId) {
+  if (!currentUser) return;
+
+  try {
+    const response = await fetch(`${API_URL}/join-requests/${requestId}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reviewerId: currentUser.id }),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('Join request approved!', 'success', 'Approved');
+      if (currentOrgId) {
+        await loadOrganizationMembers(currentOrgId);
+      }
+    } else {
+      showToast(data.message || 'Failed to approve request', 'error', 'Failed');
+    }
+  } catch (error) {
+    console.error('Approve request error:', error);
+    showToast('Unable to approve request', 'error', 'Error');
+  }
+};
+
+// Reject join request
+window.rejectJoinRequest = async function(requestId) {
+  if (!currentUser) return;
+
+  try {
+    const response = await fetch(`${API_URL}/join-requests/${requestId}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reviewerId: currentUser.id }),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('Join request rejected', 'info', 'Rejected');
+      if (currentOrgId) {
+        await loadOrganizationMembers(currentOrgId);
+      }
+    } else {
+      showToast(data.message || 'Failed to reject request', 'error', 'Failed');
+    }
+  } catch (error) {
+    console.error('Reject request error:', error);
+    showToast('Unable to reject request', 'error', 'Error');
   }
 };
 
