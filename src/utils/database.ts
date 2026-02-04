@@ -215,6 +215,24 @@ export function initializeDatabase(): void {
     )
   `);
 
+  // Migration: Add flagged_for_deletion columns if they don't exist
+  try {
+    const tableInfo = db.prepare('PRAGMA table_info(meetings)').all() as any[];
+    const hasFlag = tableInfo.some(col => col.name === 'flagged_for_deletion');
+    
+    if (!hasFlag) {
+      console.log('Running migration: Adding flagged_for_deletion columns to meetings table...');
+      db.exec(`
+        ALTER TABLE meetings ADD COLUMN flagged_for_deletion INTEGER DEFAULT 0;
+        ALTER TABLE meetings ADD COLUMN flagged_by TEXT;
+        ALTER TABLE meetings ADD COLUMN flagged_at DATETIME;
+      `);
+      console.log('✓ Migration completed successfully');
+    }
+  } catch (error) {
+    console.error('Migration warning:', error);
+  }
+
   console.log('✓ Database tables created successfully');
 }
 

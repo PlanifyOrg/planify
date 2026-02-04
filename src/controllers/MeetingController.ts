@@ -4,6 +4,10 @@
 import { Request, Response } from 'express';
 import { MeetingService } from '../services/MeetingService';
 import { OrganizationService } from '../services/OrganizationService';
+import { NotificationService } from '../services/NotificationService';
+import { EventService } from '../services/EventService';
+import { AuthService } from '../services/AuthService';
+import { NotificationType } from '../models/Notification';
 import {
   CreateMeetingDto,
   UpdateMeetingDto,
@@ -14,10 +18,22 @@ import {
 export class MeetingController {
   private meetingService: MeetingService;
   private organizationService: OrganizationService;
+  private notificationService: NotificationService;
+  private eventService: EventService;
+  private authService: AuthService;
 
-  constructor(meetingService: MeetingService, organizationService: OrganizationService) {
+  constructor(
+    meetingService: MeetingService,
+    organizationService: OrganizationService,
+    notificationService: NotificationService,
+    eventService: EventService,
+    authService: AuthService
+  ) {
     this.meetingService = meetingService;
     this.organizationService = organizationService;
+    this.notificationService = notificationService;
+    this.eventService = eventService;
+    this.authService = authService;
   }
 
   /**
@@ -458,11 +474,43 @@ export class MeetingController {
         return;
       }
 
+      // Try to notify admins (don't fail if this doesn't work)
+      try {
+        const meeting = this.meetingService.getMeetingById(id);
+        if (meeting) {
+          const event = this.eventService.getEventById(meeting.eventId);
+          if (event && event.organizationId) {
+            const organization = this.organizationService.getOrganizationById(event.organizationId);
+            if (organization) {
+              const flagger = this.authService.getUserById(userId);
+              const flaggerName = flagger ? flagger.username : 'A user';
+
+              organization.adminIds.forEach((adminId) => {
+                if (adminId !== userId) {
+                  this.notificationService.createNotification({
+                    recipientId: adminId,
+                    senderId: userId,
+                    type: NotificationType.MEETING_FLAGGED,
+                    title: '🚩 Meeting Flagged for Deletion',
+                    message: `${flaggerName} has flagged the meeting "${meeting.title}" for deletion. Please review.`,
+                    relatedEntityId: id,
+                  });
+                }
+              });
+            }
+          }
+        }
+      } catch (notificationError) {
+        console.error('Failed to send notifications:', notificationError);
+        // Continue anyway - flagging succeeded
+      }
+
       res.status(200).json({
         success: true,
         message: 'Meeting flagged for deletion',
       });
     } catch (error) {
+      console.error('Flag meeting error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to flag meeting',

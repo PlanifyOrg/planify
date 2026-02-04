@@ -5,6 +5,23 @@ let eventParticipants = [];
 let eventParticipantUsernames = {};
 let meetingParticipantUsernames = {};
 
+// Handle notification click to navigate to related entity
+window.handleNotificationClick = async function(notificationType, relatedEntityId) {
+  if (notificationType === 'meeting_flagged') {
+    // Navigate to meetings tab
+    const meetingsTabBtn = document.querySelector('[data-tab="meetings"]');
+    if (meetingsTabBtn) {
+      meetingsTabBtn.click();
+    }
+    
+    // Open the meeting details
+    setTimeout(() => {
+      viewMeetingDetails(relatedEntityId);
+    }, 100);
+  }
+  // Add more notification type handlers as needed
+};
+
 // Toast Notification System
 const showToast = (message, type = 'info', title = '') => {
   const container = document.getElementById('toastContainer');
@@ -431,16 +448,34 @@ const displayNotifications = (notifications) => {
 
   if (emptyState) emptyState.style.display = 'none';
 
-  notificationList.innerHTML = notifications.map(notification => `
-    <div class="notification-card ${!notification.isRead ? 'unread' : ''}">
-      <div class="notification-icon">🔔</div>
-      <div class="notification-content">
-        <h4>${notification.title}</h4>
-        <p>${notification.message}</p>
-        <div class="notification-time">${new Date(notification.createdAt).toLocaleString()}</div>
+  notificationList.innerHTML = notifications.map(notification => {
+    // Different icons based on notification type
+    const typeIcons = {
+      'meeting_flagged': '🚩',
+      'meeting_scheduled': '📅',
+      'meeting_reminder': '⏰',
+      'event_invitation': '📨',
+      'event_update': '🔄',
+      'task_assigned': '✓',
+      'task_due_soon': '⚠️',
+      'participant_request': '👤',
+      'general': '🔔'
+    };
+    
+    const icon = typeIcons[notification.type] || '🔔';
+    const isFlagged = notification.type === 'meeting_flagged';
+    
+    return `
+      <div class="notification-card ${!notification.isRead ? 'unread' : ''} ${isFlagged ? 'flagged-notification' : ''}" ${notification.relatedEntityId ? `onclick="handleNotificationClick('${notification.type}', '${notification.relatedEntityId}')"` : ''} style="${notification.relatedEntityId ? 'cursor: pointer;' : ''}">
+        <div class="notification-icon">${icon}</div>
+        <div class="notification-content">
+          <h4>${notification.title}</h4>
+          <p>${notification.message}</p>
+          <div class="notification-time">${new Date(notification.createdAt).toLocaleString()}</div>
+        </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 };
 
 document.addEventListener('DOMContentLoaded', () => {
