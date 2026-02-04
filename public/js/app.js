@@ -1142,16 +1142,21 @@ async function loadEventsToSelect() {
     const data = await response.json();
 
     const select = document.getElementById('meetingEventSelect');
-    if (select && data.success) {
+    if (select && data.success && data.data) {
       select.innerHTML = '<option value="">-- Select an Event --</option>';
-      data.events.forEach(event => {
+      data.data.forEach(event => {
         const option = document.createElement('option');
         option.value = event.id;
-        option.textContent = event.title;
+        option.textContent = `${event.title} (${new Date(event.startDate).toLocaleDateString()})`;
         select.appendChild(option);
       });
+      
+      if (data.data.length === 0) {
+        select.innerHTML = '<option value="">No events available - Create an event first</option>';
+      }
     }
   } catch (error) {
     console.error('Failed to load events:', error);
+    showToast('Failed to load events', 'error', 'Error');
   }
 }
