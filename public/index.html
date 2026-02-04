@@ -381,6 +381,37 @@
       </div>
     </div>
 
+    <!-- Manage Members Modal -->
+    <div id="manageMembersModal" class="modal modal-large">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Manage Members</h2>
+          <button class="close-modal" onclick="closeMembersModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-section">
+            <h3>👥 Add New Member</h3>
+            <div class="form-inline">
+              <div class="form-group" style="flex: 1;">
+                <input type="text" id="newMemberUserId" placeholder="Enter User ID">
+              </div>
+              <button class="btn" onclick="addMemberToOrg()">Add Member</button>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h3>📋 Current Members</h3>
+            <div id="membersList" style="display: flex; flex-direction: column; gap: 0.75rem;">
+              <!-- Members will be loaded here -->
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeMembersModal()">Close</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Toast Container -->
     <div id="toastContainer"></div>
 

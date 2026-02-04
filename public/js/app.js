@@ -1317,12 +1317,311 @@ async function loadOrganizationData() {
   }
 }
 
-// Placeholder functions for future implementation
-window.editOrganization = function(orgId) {
-  showToast('Edit organization feature coming soon!', 'info', 'Coming Soon');
+// Edit organization
+window.editOrganization = async function(orgId) {
+  try {
+    const response = await fetch(`${API_URL}/organizations/${orgId}`);
+    const data = await response.json();
+
+    if (data.success && data.data) {
+      const org = data.data;
+      const modal = document.getElementById('organizationModal');
+      const form = document.getElementById('organizationForm');
+      
+      if (!modal || !form) return;
+
+      // Update modal title
+      const modalHeader = modal.querySelector('.modal-header h2');
+      if (modalHeader) {
+        modalHeader.textContent = 'Edit Organization';
+      }
+
+      // Populate form
+      form.elements['name'].value = org.name;
+      form.elements['description'].value = org.description || '';
+      form.elements['website'].value = org.website || '';
+      form.elements['logo'].value = org.logo || '';
+      form.elements['allowMemberCreateEvents'].checked = org.settings.allowMemberCreateEvents;
+      form.elements['allowMemberInviteUsers'].checked = org.settings.allowMemberInviteUsers;
+      form.elements['requireEventApproval'].checked = org.settings.requireEventApproval;
+      form.elements['timezone'].value = org.settings.timezone;
+
+      // Update submit button
+      const modalFooter = modal.querySelector('.modal-footer');
+      if (modalFooter) {
+        modalFooter.innerHTML = `
+          <button class="btn btn-secondary" onclick="closeOrganizationModal(); resetOrganizationModal()">Cancel</button>
+          <button class="btn" onclick="updateOrganizationForm('${orgId}')">Update Organization</button>
+        `;
+      }
+
+      modal.classList.add('active');
+    } else {
+      showToast('Organization not found', 'error', 'Error');
+    }
+  } catch (error) {
+    console.error('Edit organization error:', error);
+    showToast('Unable to load organization for editing', 'error', 'Error');
+  }
 };
 
-window.manageMembers = function(orgId) {
-  showToast('Member management feature coming soon!', 'info', 'Coming Soon');
+// Update organization form submission
+window.updateOrganizationForm = async function(orgId) {
+  const form = document.getElementById('organizationForm');
+  const formData = new FormData(form);
+
+  const updateData = {
+    name: formData.get('name'),
+    description: formData.get('description') || '',
+    website: formData.get('website') || '',
+    logo: formData.get('logo') || '',
+    settings: {
+      allowMemberCreateEvents: formData.get('allowMemberCreateEvents') === 'on',
+      allowMemberInviteUsers: formData.get('allowMemberInviteUsers') === 'on',
+      requireEventApproval: formData.get('requireEventApproval') === 'on',
+      timezone: formData.get('timezone') || 'UTC',
+    }
+  };
+
+  try {
+    const response = await fetch(`${API_URL}/organizations/${orgId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updateData),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('Organization updated successfully!', 'success', 'Organization Updated');
+      closeOrganizationModal();
+      resetOrganizationModal();
+      loadOrganizationData();
+    } else {
+      showToast(data.message || 'Failed to update organization', 'error', 'Update Failed');
+    }
+  } catch (error) {
+    console.error('Update organization error:', error);
+    showToast('Unable to update organization', 'error', 'Update Failed');
+  }
+};
+
+// Reset organization modal to create mode
+window.resetOrganizationModal = function() {
+  const modal = document.getElementById('organizationModal');
+  if (!modal) return;
+
+  // Reset modal title
+  const modalHeader = modal.querySelector('.modal-header h2');
+  if (modalHeader) {
+    modalHeader.textContent = 'Create Organization';
+  }
+
+  // Reset submit button
+  const modalFooter = modal.querySelector('.modal-footer');
+  if (modalFooter) {
+    modalFooter.innerHTML = `
+      <button class="btn btn-secondary" onclick="closeOrganizationModal()">Cancel</button>
+      <button class="btn" onclick="submitOrganizationForm()">Create Organization</button>
+    `;
+  }
+
+  // Clear form
+  const form = document.getElementById('organizationForm');
+  if (form) {
+    form.reset();
+  }
+};
+
+// Manage members
+let currentOrgId = null;
+
+window.manageMembers = async function(orgId) {
+  currentOrgId = orgId;
+  const modal = document.getElementById('manageMembersModal');
+  if (modal) {
+    modal.classList.add('active');
+    await loadOrganizationMembers(orgId);
+  }
+};
+
+window.closeMembersModal = function() {
+  const modal = document.getElementById('manageMembersModal');
+  if (modal) {
+    modal.classList.remove('active');
+    currentOrgId = null;
+  }
+};
+
+// Load organization members
+async function loadOrganizationMembers(orgId) {
+  try {
+    const response = await fetch(`${API_URL}/organizations/${orgId}`);
+    const data = await response.json();
+
+    if (data.success && data.data) {
+      const org = data.data;
+      const membersList = document.getElementById('membersList');
+      
+      if (!membersList) return;
+
+      if (org.memberIds.length === 0) {
+        membersList.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">No members yet</p>';
+        return;
+      }
+
+      // Fetch user details for each member
+      const memberPromises = org.memberIds.map(async (userId) => {
+        try {
+          const userResponse = await fetch(`${API_URL}/auth/user/${userId}`);
+          const userData = await userResponse.json();
+          return {
+            id: userId,
+            username: userData.data?.username || 'Unknown User',
+            isAdmin: org.adminIds.includes(userId)
+          };
+        } catch {
+          return { id: userId, username: 'Unknown User', isAdmin: org.adminIds.includes(userId) };
+        }
+      });
+
+      const members = await Promise.all(memberPromises);
+
+      membersList.innerHTML = members.map(member => `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: white; border-radius: var(--radius-md); box-shadow: var(--shadow-sm);">
+          <div style="display: flex; align-items: center; gap: 1rem;">
+            <div style="width: 40px; height: 40px; border-radius: var(--radius-full); background: var(--primary-gradient); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600;">
+              ${member.username.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div style="font-weight: 600;">${member.username}</div>
+              <div style="font-size: 0.875rem; color: var(--text-secondary);">${member.id}</div>
+            </div>
+            ${member.isAdmin ? '<span class="badge" style="background: var(--primary-gradient); color: white; margin-left: 0.5rem;">Admin</span>' : ''}
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            ${!member.isAdmin ? `<button class="btn btn-sm btn-secondary" onclick="promoteToAdmin('${member.id}')">Make Admin</button>` : `<button class="btn btn-sm btn-secondary" onclick="demoteAdmin('${member.id}')">Remove Admin</button>`}
+            <button class="btn btn-sm btn-danger" onclick="removeMemberFromOrg('${member.id}', '${member.username}')">Remove</button>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch (error) {
+    console.error('Failed to load members:', error);
+    showToast('Failed to load members', 'error', 'Error');
+  }
+}
+
+// Add member to organization
+window.addMemberToOrg = async function() {
+  if (!currentOrgId) return;
+
+  const input = document.getElementById('newMemberUserId');
+  const userId = input.value.trim();
+
+  if (!userId) {
+    showToast('Please enter a user ID', 'warning', 'Missing Information');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/organizations/${currentOrgId}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('Member added successfully!', 'success', 'Member Added');
+      input.value = '';
+      await loadOrganizationMembers(currentOrgId);
+      await loadOrganizationData();
+    } else {
+      showToast(data.message || 'Failed to add member', 'error', 'Failed');
+    }
+  } catch (error) {
+    console.error('Add member error:', error);
+    showToast('Unable to add member', 'error', 'Error');
+  }
+};
+
+// Remove member from organization
+window.removeMemberFromOrg = async function(userId, username) {
+  if (!currentOrgId) return;
+
+  if (!confirm(`Are you sure you want to remove ${username} from the organization?`)) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/organizations/${currentOrgId}/members/${userId}`, {
+      method: 'DELETE',
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('Member removed successfully!', 'success', 'Member Removed');
+      await loadOrganizationMembers(currentOrgId);
+      await loadOrganizationData();
+    } else {
+      showToast(data.message || 'Failed to remove member', 'error', 'Failed');
+    }
+  } catch (error) {
+    console.error('Remove member error:', error);
+    showToast('Unable to remove member', 'error', 'Error');
+  }
+};
+
+// Promote user to admin
+window.promoteToAdmin = async function(userId) {
+  if (!currentOrgId) return;
+
+  try {
+    const response = await fetch(`${API_URL}/organizations/${currentOrgId}/admins`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('User promoted to admin!', 'success', 'Admin Added');
+      await loadOrganizationMembers(currentOrgId);
+      await loadOrganizationData();
+    } else {
+      showToast(data.message || 'Failed to promote user', 'error', 'Failed');
+    }
+  } catch (error) {
+    console.error('Promote admin error:', error);
+    showToast('Unable to promote user', 'error', 'Error');
+  }
+};
+
+// Demote admin
+window.demoteAdmin = async function(userId) {
+  if (!currentOrgId) return;
+
+  try {
+    const response = await fetch(`${API_URL}/organizations/${currentOrgId}/admins/${userId}`, {
+      method: 'DELETE',
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('Admin privileges removed!', 'success', 'Admin Removed');
+      await loadOrganizationMembers(currentOrgId);
+      await loadOrganizationData();
+    } else {
+      showToast(data.message || 'Failed to demote admin', 'error', 'Failed');
+    }
+  } catch (error) {
+    console.error('Demote admin error:', error);
+    showToast('Unable to demote admin', 'error', 'Error');
+  }
 };
 
