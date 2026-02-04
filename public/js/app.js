@@ -362,7 +362,7 @@ const loadMeetingsForUser = async () => {
       meetingCard.className = 'meeting-card';
       meetingCard.innerHTML = `
         ${meeting.flaggedForDeletion ? '<div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; padding: 0.5rem 1rem; border-radius: var(--radius-md) var(--radius-md) 0 0; font-size: 0.875rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;"><span>⚠️</span> Flagged for Deletion</div>' : ''}
-        <h4>📋 ${meeting.title}</h4>
+        <h4>📋 ${meeting.title} ${!meeting.eventId ? '<span style="font-size: 0.75rem; padding: 0.25rem 0.5rem; background: var(--primary-gradient); color: white; border-radius: var(--radius-sm); margin-left: 0.5rem;">Independent</span>' : ''}</h4>
         <div class="meeting-info">
           <span>🗓️ ${new Date(meeting.scheduledTime).toLocaleString()}</span>
           <span>⏱️ ${meeting.duration} min</span>
@@ -1488,12 +1488,8 @@ window.submitMeetingForm = async function() {
   const form = document.getElementById('meetingForm');
   const formData = new FormData(form);
 
-  // Get selected event
-  const eventId = formData.get('eventId');
-  if (!eventId) {
-    showToast('Please select an event', 'warning', 'Missing Information');
-    return;
-  }
+  // Get selected event (optional now)
+  const eventId = formData.get('eventId') || undefined;
 
   // Get document templates
   const createNotes = formData.get('createNotes') === 'notes';
@@ -1503,7 +1499,7 @@ window.submitMeetingForm = async function() {
   const meetingData = {
     title: formData.get('title'),
     description: formData.get('description') || '',
-    eventId: eventId,
+    eventId: eventId, // Optional: can be undefined for independent meetings
     scheduledTime: new Date(formData.get('scheduledTime')),
     duration: parseInt(formData.get('duration')),
     meetingLink: formData.get('meetingLink') || undefined,

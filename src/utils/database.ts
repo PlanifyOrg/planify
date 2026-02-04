@@ -265,6 +265,53 @@ export function initializeDatabase(): void {
     console.error('Migration warning:', error);
   }
 
+  // Migration: Make event_id optional (nullable) in meetings table
+  try {
+    const tableInfo = db.prepare('PRAGMA table_info(meetings)').all() as any[];
+    const eventIdCol = tableInfo.find((col: any) => col.name === 'event_id');
+    
+    // Check if event_id is currently NOT NULL
+    if (eventIdCol && eventIdCol.notnull === 1) {
+      console.log('Running migration: Making event_id optional in meetings table...');
+      
+      // SQLite doesn't support ALTER COLUMN, so we need to recreate the table
+      db.exec(`
+        -- Create new table with optional event_id
+        CREATE TABLE meetings_new (
+          id TEXT PRIMARY KEY,
+          event_id TEXT,
+          title TEXT NOT NULL,
+          description TEXT,
+          scheduled_time DATETIME NOT NULL,
+          duration INTEGER NOT NULL,
+          meeting_link TEXT,
+          created_by TEXT,
+          status TEXT NOT NULL,
+          flagged_for_deletion INTEGER DEFAULT 0,
+          flagged_by TEXT,
+          flagged_at DATETIME,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE SET NULL,
+          FOREIGN KEY (flagged_by) REFERENCES users(id) ON DELETE SET NULL
+        );
+        
+        -- Copy data from old table
+        INSERT INTO meetings_new SELECT * FROM meetings;
+        
+        -- Drop old table
+        DROP TABLE meetings;
+        
+        -- Rename new table
+        ALTER TABLE meetings_new RENAME TO meetings;
+      `);
+      
+      console.log('✓ Migration completed successfully');
+    }
+  } catch (error) {
+    console.error('Migration warning:', error);
+  }
+
   console.log('✓ Database tables created successfully');
 }
 

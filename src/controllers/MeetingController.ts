@@ -54,10 +54,10 @@ export class MeetingController {
         createdBy,
       } = req.body;
 
-      if (!eventId || !title || !scheduledTime || !duration || !createdBy) {
+      if (!title || !scheduledTime || !duration || !createdBy) {
         res.status(400).json({
           success: false,
-          message: 'eventId, title, scheduledTime, duration, and createdBy are required',
+          message: 'title, scheduledTime, duration, and createdBy are required',
         });
         return;
       }
@@ -569,7 +569,7 @@ export class MeetingController {
       // Try to notify admins (don't fail if this doesn't work)
       try {
         const meeting = this.meetingService.getMeetingById(id);
-        if (meeting) {
+        if (meeting && meeting.eventId) {
           const event = this.eventService.getEventById(meeting.eventId);
           if (event && event.organizationId) {
             const organization = this.organizationService.getOrganizationById(event.organizationId);

@@ -239,10 +239,11 @@
                 <textarea name="description" placeholder="Meeting description" rows="2"></textarea>
               </div>
               <div class="form-group">
-                <label>Event</label>
-                <select name="eventId" id="meetingEventSelect" required>
-                  <option value="">-- Select an Event --</option>
+                <label>Event (Optional)</label>
+                <select name="eventId" id="meetingEventSelect">
+                  <option value="">-- No Event (Independent Meeting) --</option>
                 </select>
+                <small style="color: var(--text-secondary); font-size: 0.875rem;">You can create a meeting without linking it to an event</small>
               </div>
               <div class="form-inline">
                 <div class="form-group">

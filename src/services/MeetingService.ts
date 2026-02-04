@@ -30,7 +30,7 @@ export class MeetingService {
 
     stmt.run(
       meetingId,
-      meetingData.eventId,
+      meetingData.eventId || null, // Allow null for independent meetings
       meetingData.title,
       meetingData.description,
       meetingData.scheduledTime.toISOString(),

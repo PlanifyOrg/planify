@@ -3,7 +3,7 @@
  */
 export interface Meeting {
   id: string;
-  eventId: string;
+  eventId?: string; // Optional: meetings can be independent or linked to events
   title: string;
   description: string;
   scheduledTime: Date;
@@ -67,7 +67,7 @@ export enum MeetingStatus {
 }
 
 export interface CreateMeetingDto {
-  eventId: string;
+  eventId?: string; // Optional: meetings can be independent
   title: string;
   description: string;
   scheduledTime: Date;
