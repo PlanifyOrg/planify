@@ -342,44 +342,130 @@ const loadMeetingsForUser = async () => {
     const meetingsResponse = await fetch(url);
     const meetingsData = await meetingsResponse.json();
     
-    const meetingList = document.getElementById('meetingsList');
+    const ongoingContainer = document.getElementById('ongoingMeetingsContainer');
+    const upcomingContainer = document.getElementById('upcomingMeetingsContainer');
+    const pastContainer = document.getElementById('pastMeetingsContainer');
+    const ongoingList = document.getElementById('ongoingMeetingsList');
+    const upcomingList = document.getElementById('upcomingMeetingsList');
+    const pastList = document.getElementById('pastMeetingsList');
     const emptyState = document.getElementById('meetingsEmpty');
     
-    if (!meetingList) return;
+    if (!ongoingList || !upcomingList || !pastList) return;
     
     if (!meetingsData.success || !meetingsData.data || meetingsData.data.length === 0) {
-      meetingList.innerHTML = '';
+      ongoingList.innerHTML = '';
+      upcomingList.innerHTML = '';
+      pastList.innerHTML = '';
+      ongoingContainer.style.display = 'none';
+      upcomingContainer.style.display = 'none';
+      pastContainer.style.display = 'none';
       if (emptyState) emptyState.style.display = 'block';
       return;
     }
 
     if (emptyState) emptyState.style.display = 'none';
     
-    meetingList.innerHTML = '';
+    // Categorize meetings by time status
+    const now = new Date();
+    const ongoingMeetings = [];
+    const upcomingMeetings = [];
+    const pastMeetings = [];
     
     meetingsData.data.forEach(meeting => {
-      const meetingCard = document.createElement('div');
-      meetingCard.className = 'meeting-card';
-      meetingCard.innerHTML = `
-        ${meeting.flaggedForDeletion ? '<div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; padding: 0.5rem 1rem; border-radius: var(--radius-md) var(--radius-md) 0 0; font-size: 0.875rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;"><span>⚠️</span> Flagged for Deletion</div>' : ''}
-        <h4>📋 ${meeting.title} ${!meeting.eventId ? '<span style="font-size: 0.75rem; padding: 0.25rem 0.5rem; background: var(--primary-gradient); color: white; border-radius: var(--radius-sm); margin-left: 0.5rem;">Independent</span>' : ''}</h4>
-        <div class="meeting-info">
-          <span>🗓️ ${new Date(meeting.scheduledTime).toLocaleString()}</span>
-          <span>⏱️ ${meeting.duration} min</span>
-          <span>👥 ${meeting.participants.length} participants</span>
-          <span>📝 ${meeting.agendaItems.length} agenda items</span>
-          ${meeting.meetingLink ? '<span>🔗 Has video link</span>' : ''}
-        </div>
-        <div class="meeting-actions">
-          <button class="btn btn-sm" onclick="viewMeetingDetails('${meeting.id}')">View Details</button>
-          <button class="btn btn-sm btn-success" onclick="checkInToMeeting('${meeting.id}', '${currentUser.id}')">Check In</button>
-        </div>
-      `;
-      meetingList.appendChild(meetingCard);
+      const scheduledTime = new Date(meeting.scheduledTime);
+      const endTime = new Date(scheduledTime.getTime() + meeting.duration * 60000);
+      
+      if (now >= scheduledTime && now <= endTime) {
+        ongoingMeetings.push(meeting);
+      } else if (now < scheduledTime) {
+        upcomingMeetings.push(meeting);
+      } else {
+        pastMeetings.push(meeting);
+      }
     });
+    
+    // Sort meetings by scheduled time
+    upcomingMeetings.sort((a, b) => new Date(a.scheduledTime) - new Date(b.scheduledTime));
+    pastMeetings.sort((a, b) => new Date(b.scheduledTime) - new Date(a.scheduledTime));
+    ongoingMeetings.sort((a, b) => new Date(a.scheduledTime) - new Date(b.scheduledTime));
+    
+    // Render ongoing meetings
+    if (ongoingMeetings.length > 0) {
+      ongoingContainer.style.display = 'block';
+      ongoingList.innerHTML = '';
+      document.getElementById('ongoingCount').textContent = `(${ongoingMeetings.length})`;
+      ongoingMeetings.forEach(meeting => {
+        const meetingCard = createMeetingCard(meeting);
+        ongoingList.appendChild(meetingCard);
+      });
+    } else {
+      ongoingContainer.style.display = 'none';
+    }
+    
+    // Render upcoming meetings (collapsed by default)
+    if (upcomingMeetings.length > 0) {
+      upcomingContainer.style.display = 'block';
+      upcomingList.innerHTML = '';
+      document.getElementById('upcomingCount').textContent = `(${upcomingMeetings.length})`;
+      upcomingMeetings.forEach(meeting => {
+        const meetingCard = createMeetingCard(meeting);
+        upcomingList.appendChild(meetingCard);
+      });
+    } else {
+      upcomingContainer.style.display = 'none';
+    }
+    
+    // Render past meetings (collapsed by default)
+    if (pastMeetings.length > 0) {
+      pastContainer.style.display = 'block';
+      pastList.innerHTML = '';
+      document.getElementById('pastCount').textContent = `(${pastMeetings.length})`;
+      pastMeetings.forEach(meeting => {
+        const meetingCard = createMeetingCard(meeting);
+        pastList.appendChild(meetingCard);
+      });
+    } else {
+      pastContainer.style.display = 'none';
+    }
   } catch (error) {
     console.error('Failed to load meetings:', error);
   }
+};
+
+// Toggle meeting section collapse/expand
+const toggleMeetingSection = (section) => {
+  const list = document.getElementById(`${section}MeetingsList`);
+  const icon = document.getElementById(`${section}ToggleIcon`);
+  
+  if (list.style.display === 'none') {
+    list.style.display = 'block';
+    icon.textContent = '▼';
+  } else {
+    list.style.display = 'none';
+    icon.textContent = '▶';
+  }
+};
+
+// Helper function to create meeting card
+const createMeetingCard = (meeting) => {
+  const meetingCard = document.createElement('div');
+  meetingCard.className = 'meeting-card';
+  meetingCard.innerHTML = `
+    ${meeting.flaggedForDeletion ? '<div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; padding: 0.5rem 1rem; border-radius: var(--radius-md) var(--radius-md) 0 0; font-size: 0.875rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;"><span>⚠️</span> Flagged for Deletion</div>' : ''}
+    <h4>📋 ${meeting.title} ${!meeting.eventId ? '<span style="font-size: 0.75rem; padding: 0.25rem 0.5rem; background: var(--primary-gradient); color: white; border-radius: var(--radius-sm); margin-left: 0.5rem;">Independent</span>' : ''}</h4>
+    <div class="meeting-info">
+      <span>🗓️ ${new Date(meeting.scheduledTime).toLocaleString()}</span>
+      <span>⏱️ ${meeting.duration} min</span>
+      <span>👥 ${meeting.participants.length} participants</span>
+      <span>📝 ${meeting.agendaItems.length} agenda items</span>
+      ${meeting.meetingLink ? '<span>🔗 Has video link</span>' : ''}
+    </div>
+    <div class="meeting-actions">
+      <button class="btn btn-sm" onclick="viewMeetingDetails('${meeting.id}')">View Details</button>
+      <button class="btn btn-sm btn-success" onclick="checkInToMeeting('${meeting.id}', '${currentUser.id}')">Check In</button>
+    </div>
+  `;
+  return meetingCard;
 };
 
 // Display events in the UI
