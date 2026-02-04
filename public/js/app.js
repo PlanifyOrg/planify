@@ -71,7 +71,7 @@ const checkAuth = () => {
 };
 
 // Update UI when user is logged in
-const updateUIForLoggedInUser = () => {
+const updateUIForLoggedInUser = async () => {
   const usernameEl = document.getElementById('currentUsername');
   const userAvatar = document.getElementById('userAvatar');
   
@@ -88,7 +88,8 @@ const updateUIForLoggedInUser = () => {
     logoutBtn.addEventListener('click', logout);
   }
   
-  loadUserData();
+  // Check if user has an organization
+  await checkUserOrganization();
 };
 
 // Logout function
@@ -96,6 +97,178 @@ const logout = () => {
   currentUser = null;
   localStorage.removeItem('currentUser');
   location.reload();
+};
+
+// Check if user has an organization
+async function checkUserOrganization() {
+  if (!currentUser) return;
+
+  try {
+    const response = await fetch(`${API_URL}/organizations/user/${currentUser.id}`);
+    const data = await response.json();
+
+    if (data.success && data.data && data.data.length > 0) {
+      // User has an organization, load normal data
+      loadUserData();
+    } else {
+      // User has no organization, show required modal
+      showOrgRequiredModal();
+    }
+  } catch (error) {
+    console.error('Failed to check organization:', error);
+    showOrgRequiredModal();
+  }
+}
+
+// Show organization required modal
+function showOrgRequiredModal() {
+  const modal = document.getElementById('orgRequiredModal');
+  if (modal) {
+    modal.classList.add('active');
+    // Disable all navigation
+    disableNavigation();
+  }
+}
+
+// Disable navigation until user has organization
+function disableNavigation() {
+  const navButtons = document.querySelectorAll('.nav-tabs button');
+  const createButtons = document.querySelectorAll('#createEventBtn, #createMeetingBtn, #createTaskBtn');
+  
+  navButtons.forEach(btn => {
+    if (btn.dataset.tab !== 'organization') {
+      btn.disabled = true;
+      btn.style.opacity = '0.5';
+      btn.style.cursor = 'not-allowed';
+    }
+  });
+  
+  createButtons.forEach(btn => {
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.style.cursor = 'not-allowed';
+  });
+}
+
+// Enable navigation after user joins organization
+function enableNavigation() {
+  const navButtons = document.querySelectorAll('.nav-tabs button');
+  const createButtons = document.querySelectorAll('#createEventBtn, #createMeetingBtn, #createTaskBtn');
+  
+  navButtons.forEach(btn => {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+  });
+  
+  createButtons.forEach(btn => {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+  });
+}
+
+// Show create org from required modal
+window.showCreateOrgFromRequired = function() {
+  const requiredModal = document.getElementById('orgRequiredModal');
+  if (requiredModal) {
+    requiredModal.classList.remove('active');
+  }
+  openOrganizationModal();
+};
+
+// Show join org form
+window.showJoinOrgForm = function() {
+  const form = document.getElementById('joinOrgForm');
+  if (form) {
+    form.style.display = 'block';
+  }
+};
+
+// Search organizations
+window.searchOrganizations = async function() {
+  const searchInput = document.getElementById('joinOrgSearch');
+  const searchValue = searchInput.value.trim();
+
+  if (!searchValue) {
+    showToast('Please enter an organization ID or name', 'warning', 'Missing Information');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/organizations`);
+    const data = await response.json();
+
+    if (data.success && data.data) {
+      const results = data.data.filter(org => 
+        org.id.toLowerCase().includes(searchValue.toLowerCase()) ||
+        org.name.toLowerCase().includes(searchValue.toLowerCase())
+      );
+
+      const resultsContainer = document.getElementById('orgSearchResults');
+      const resultsList = document.getElementById('orgResultsList');
+
+      if (results.length === 0) {
+        resultsList.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No organizations found</p>';
+        resultsContainer.style.display = 'block';
+        return;
+      }
+
+      resultsList.innerHTML = results.map(org => `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 1.5rem; background: white; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);">
+          <div style="display: flex; align-items: center; gap: 1rem;">
+            ${org.logo ? `<img src="${org.logo}" alt="${org.name}" style="width: 50px; height: 50px; border-radius: var(--radius-md);">` : '<div style="width: 50px; height: 50px; border-radius: var(--radius-md); background: var(--primary-gradient); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">🏢</div>'}
+            <div>
+              <h4 style="margin: 0 0 0.25rem 0;">${org.name}</h4>
+              <p style="margin: 0; font-size: 0.875rem; color: var(--text-secondary);">${org.description || 'No description'}</p>
+              <p style="margin: 0.25rem 0 0 0; font-size: 0.75rem; color: var(--text-tertiary);">ID: ${org.id}</p>
+            </div>
+          </div>
+          <button class="btn" onclick="requestJoinOrganization('${org.id}', '${org.name}')">Join</button>
+        </div>
+      `).join('');
+
+      resultsContainer.style.display = 'block';
+    }
+  } catch (error) {
+    console.error('Search organizations error:', error);
+    showToast('Failed to search organizations', 'error', 'Error');
+  }
+};
+
+// Request to join organization
+window.requestJoinOrganization = async function(orgId, orgName) {
+  if (!currentUser) return;
+
+  try {
+    const response = await fetch(`${API_URL}/organizations/${orgId}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: currentUser.id }),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast(`Successfully joined ${orgName}!`, 'success', 'Joined Organization');
+      
+      // Close modals and enable navigation
+      const requiredModal = document.getElementById('orgRequiredModal');
+      if (requiredModal) {
+        requiredModal.classList.remove('active');
+      }
+      
+      enableNavigation();
+      
+      // Reload user data
+      await checkUserOrganization();
+    } else {
+      showToast(data.message || 'Failed to join organization', 'error', 'Failed');
+    }
+  } catch (error) {
+    console.error('Join organization error:', error);
+    showToast('Unable to join organization', 'error', 'Error');
+  }
 };
 
 // Load user's events and meetings

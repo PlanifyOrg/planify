@@ -412,6 +412,56 @@
       </div>
     </div>
 
+    <!-- Organization Required Modal -->
+    <div id="orgRequiredModal" class="modal modal-large" style="z-index: 10000;">
+      <div class="modal-content">
+        <div class="modal-header" style="background: var(--warning-gradient);">
+          <h2>🏢 Organization Required</h2>
+        </div>
+        <div class="modal-body">
+          <div style="text-align: center; padding: 2rem 0;">
+            <div style="font-size: 4rem; margin-bottom: 1rem;">🏢</div>
+            <h3 style="margin-bottom: 1rem;">Welcome to Planify!</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+              To start planning events and meetings, you need to create or join an organization.
+            </p>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+            <div style="padding: 2rem; background: var(--gray-50); border-radius: var(--radius-lg); text-align: center; cursor: pointer; transition: all var(--transition-base);" onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='var(--shadow-xl)'" onmouseout="this.style.transform=''; this.style.boxShadow=''" onclick="showCreateOrgFromRequired()">
+              <div style="font-size: 3rem; margin-bottom: 1rem;">➕</div>
+              <h4 style="margin-bottom: 0.5rem;">Create Organization</h4>
+              <p style="color: var(--text-secondary); font-size: 0.875rem;">Start your own organization and invite team members</p>
+            </div>
+
+            <div style="padding: 2rem; background: var(--gray-50); border-radius: var(--radius-lg); text-align: center; cursor: pointer; transition: all var(--transition-base);" onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='var(--shadow-xl)'" onmouseout="this.style.transform=''; this.style.boxShadow=''" onclick="showJoinOrgForm()">
+              <div style="font-size: 3rem; margin-bottom: 1rem;">🔗</div>
+              <h4 style="margin-bottom: 0.5rem;">Join Organization</h4>
+              <p style="color: var(--text-secondary); font-size: 0.875rem;">Request to join an existing organization</p>
+            </div>
+          </div>
+
+          <div id="joinOrgForm" style="display: none;">
+            <div class="form-section">
+              <h3>🔍 Find Organization</h3>
+              <div class="form-group">
+                <label>Organization ID or Name</label>
+                <input type="text" id="joinOrgSearch" placeholder="Enter organization ID or search by name">
+              </div>
+              <button class="btn" onclick="searchOrganizations()" style="width: 100%; margin-bottom: 1rem;">Search Organizations</button>
+              
+              <div id="orgSearchResults" style="display: none; margin-top: 1rem;">
+                <h4 style="margin-bottom: 1rem;">Available Organizations</h4>
+                <div id="orgResultsList" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                  <!-- Search results will appear here -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Toast Container -->
     <div id="toastContainer"></div>
 
