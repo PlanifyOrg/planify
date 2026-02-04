@@ -296,8 +296,9 @@ export function initializeDatabase(): void {
           FOREIGN KEY (flagged_by) REFERENCES users(id) ON DELETE SET NULL
         );
         
-        -- Copy data from old table
-        INSERT INTO meetings_new SELECT * FROM meetings;
+        -- Copy data from old table with explicit column mapping
+        INSERT INTO meetings_new (id, event_id, title, description, scheduled_time, duration, meeting_link, created_by, status, flagged_for_deletion, flagged_by, flagged_at, created_at, updated_at)
+        SELECT id, event_id, title, description, scheduled_time, duration, meeting_link, created_by, status, flagged_for_deletion, flagged_by, flagged_at, created_at, updated_at FROM meetings;
         
         -- Drop old table
         DROP TABLE meetings;
@@ -307,6 +308,29 @@ export function initializeDatabase(): void {
       `);
       
       console.log('✓ Migration completed successfully');
+    }
+  } catch (error) {
+    console.error('Migration warning:', error);
+  }
+
+  // Migration: Fix corrupted created_by data
+  try {
+    // Check if there are meetings with timestamp-like created_by values
+    const checkStmt = db.prepare(`SELECT id, created_by FROM meetings WHERE created_by LIKE '%-%-%T%' LIMIT 1`);
+    const corruptedRow = checkStmt.get();
+    
+    if (corruptedRow) {
+      console.log('Running migration: Fixing corrupted created_by values...');
+      
+      // We need to clear the corrupted created_by values since we can't recover the original user IDs
+      // The application will need to handle meetings without creators gracefully
+      db.exec(`
+        UPDATE meetings 
+        SET created_by = NULL 
+        WHERE created_by LIKE '%-%-%T%'
+      `);
+      
+      console.log('✓ Migration completed: Cleared corrupted created_by values. Note: Some meetings may not have a creator.');
     }
   } catch (error) {
     console.error('Migration warning:', error);

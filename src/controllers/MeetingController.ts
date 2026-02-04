@@ -690,6 +690,8 @@ export class MeetingController {
       const { id } = req.params;
       const { requesterId } = req.body;
 
+      console.log('Delete meeting request:', { id, requesterId, body: req.body });
+
       if (!requesterId) {
         res.status(400).json({
           success: false,
@@ -698,7 +700,7 @@ export class MeetingController {
         return;
       }
 
-      // Get meeting to find organization
+      // Get meeting to check permissions
       const meeting = this.meetingService.getMeetingById(id);
       if (!meeting) {
         res.status(404).json({
@@ -708,24 +710,58 @@ export class MeetingController {
         return;
       }
 
-      // Get event to find organization
-      const eventStmt = require('../utils/database').db.prepare('SELECT organization_id FROM events WHERE id = ?');
-      const event = eventStmt.get(meeting.eventId) as any;
-      
-      if (!event || !event.organization_id) {
-        res.status(400).json({
-          success: false,
-          message: 'Event organization not found',
-        });
-        return;
+      // Get requester's organization
+      const userStmt = require('../utils/database').db.prepare(
+        'SELECT organization_id FROM users WHERE id = ?'
+      );
+      const requester = userStmt.get(requesterId) as any;
+      const requesterOrgId = requester?.organization_id;
+
+      console.log('Permission check:', {
+        meetingId: id,
+        meetingCreator: meeting.createdBy,
+        requesterId,
+        requesterOrgId,
+      });
+
+      // Check if requester is the meeting creator
+      let canDelete = meeting.createdBy === requesterId;
+
+      // If requester is an admin in their organization, they can delete any meeting
+      if (!canDelete && requesterOrgId) {
+        const isOrgAdmin = this.organizationService.isAdmin(requesterOrgId, requesterId);
+        if (isOrgAdmin) {
+          canDelete = true;
+          console.log('Allowing delete: user is an admin in their organization');
+        }
       }
 
-      // Check if requester is admin
-      const isAdmin = this.organizationService.isAdmin(event.organization_id, requesterId);
-      if (!isAdmin) {
+      // If meeting is linked to an event, check if user is event organizer
+      if (!canDelete && meeting.eventId) {
+        const eventStmt = require('../utils/database').db.prepare(
+          'SELECT organizer_id FROM events WHERE id = ?'
+        );
+        const event = eventStmt.get(meeting.eventId) as any;
+        
+        if (event && event.organizer_id === requesterId) {
+          canDelete = true;
+          console.log('Allowing delete: user is event organizer');
+        }
+      }
+
+      // Fallback: check if user is a meeting participant
+      if (!canDelete) {
+        const isParticipant = meeting.participants.some(p => p.userId === requesterId);
+        if (isParticipant) {
+          canDelete = true;
+          console.log('Allowing delete: user is meeting participant');
+        }
+      }
+
+      if (!canDelete) {
         res.status(403).json({
           success: false,
-          message: 'Only admins can delete meetings',
+          message: 'Only the meeting creator, event organizers, organization admins, or participants can delete this meeting',
         });
         return;
       }
