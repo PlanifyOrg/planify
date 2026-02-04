@@ -8,6 +8,9 @@ export interface Meeting {
   description: string;
   scheduledTime: Date;
   duration: number; // in minutes
+  meetingLink?: string; // Video conference link (Zoom, Teams, BBB, etc.)
+  createdBy: string; // User ID of meeting creator
+  createdByUsername?: string;
   participants: MeetingParticipant[];
   agendaItems: AgendaItem[];
   documents: MeetingDocument[];
@@ -69,6 +72,8 @@ export interface CreateMeetingDto {
   description: string;
   scheduledTime: Date;
   duration: number;
+  meetingLink?: string;
+  createdBy: string;
   participants: string[];
   agendaItems?: CreateAgendaItemDto[];
 }
@@ -92,5 +97,6 @@ export interface UpdateMeetingDto {
   description?: string;
   scheduledTime?: Date;
   duration?: number;
+  meetingLink?: string;
   status?: MeetingStatus;
 }

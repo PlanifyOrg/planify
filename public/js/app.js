@@ -210,8 +210,11 @@ window.searchOrganizations = async function() {
   const searchInput = document.getElementById('joinOrgSearch');
   const searchValue = searchInput.value.trim();
 
+  const resultsContainer = document.getElementById('orgSearchResults');
+  const resultsList = document.getElementById('orgResultsList');
+
   if (!searchValue) {
-    showToast('Please enter an organization ID or name', 'warning', 'Missing Information');
+    resultsContainer.style.display = 'none';
     return;
   }
 
@@ -224,9 +227,6 @@ window.searchOrganizations = async function() {
         org.id.toLowerCase().includes(searchValue.toLowerCase()) ||
         org.name.toLowerCase().includes(searchValue.toLowerCase())
       );
-
-      const resultsContainer = document.getElementById('orgSearchResults');
-      const resultsList = document.getElementById('orgResultsList');
 
       if (results.length === 0) {
         resultsList.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No organizations found</p>';
@@ -252,7 +252,8 @@ window.searchOrganizations = async function() {
     }
   } catch (error) {
     console.error('Search organizations error:', error);
-    showToast('Failed to search organizations', 'error', 'Error');
+    resultsList.innerHTML = '<p style="text-align: center; color: var(--error); padding: 2rem;">Failed to search organizations</p>';
+    resultsContainer.style.display = 'block';
   }
 };
 
@@ -316,60 +317,66 @@ const loadUserData = async () => {
 };
 
 // Load meetings for the current user
+// Load meetings for the current user
 const loadMeetingsForUser = async () => {
   if (!currentUser) return;
 
   try {
-    // Get user's events first
-    const eventsResponse = await fetch(`${API_URL}/events/user/${currentUser.id}`);
-    const eventsData = await eventsResponse.json();
+    // Check if user is admin to show all meetings
+    let isAdmin = false;
+    try {
+      const orgResponse = await fetch(`${API_URL}/organizations/user/${currentUser.id}`);
+      const orgData = await orgResponse.json();
+      if (orgData.success && orgData.data && orgData.data.length > 0) {
+        const org = orgData.data[0];
+        isAdmin = org.adminIds.includes(currentUser.id);
+      }
+    } catch (error) {
+      console.error('Failed to check admin status:', error);
+    }
+
+    // Get meetings where user is a participant (or all meetings if admin)
+    const url = isAdmin 
+      ? `${API_URL}/meetings/user/${currentUser.id}?includeAll=true`
+      : `${API_URL}/meetings/user/${currentUser.id}`;
+    const meetingsResponse = await fetch(url);
+    const meetingsData = await meetingsResponse.json();
     
     const meetingList = document.getElementById('meetingsList');
     const emptyState = document.getElementById('meetingsEmpty');
     
     if (!meetingList) return;
     
-    if (!eventsData.success || !eventsData.data.length) {
+    if (!meetingsData.success || !meetingsData.data || meetingsData.data.length === 0) {
       meetingList.innerHTML = '';
       if (emptyState) emptyState.style.display = 'block';
       return;
     }
 
+    if (emptyState) emptyState.style.display = 'none';
+    
     meetingList.innerHTML = '';
-    let hasMeetings = false;
-
-    // Load meetings for each event
-    for (const event of eventsData.data) {
-      const meetingsResponse = await fetch(`${API_URL}/meetings/event/${event.id}`);
-      const meetingsData = await meetingsResponse.json();
-
-      if (meetingsData.success && meetingsData.data.length > 0) {
-        hasMeetings = true;
-        meetingsData.data.forEach(meeting => {
-          const meetingCard = document.createElement('div');
-          meetingCard.className = 'meeting-card';
-          meetingCard.innerHTML = `
-            ${meeting.flaggedForDeletion ? '<div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; padding: 0.5rem 1rem; border-radius: var(--radius-md) var(--radius-md) 0 0; font-size: 0.875rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;"><span>⚠️</span> Flagged for Deletion</div>' : ''}
-            <h4>📋 ${meeting.title}</h4>
-            <div class="meeting-info">
-              <span>🗓️ ${new Date(meeting.scheduledTime).toLocaleString()}</span>
-              <span>⏱️ ${meeting.duration} min</span>
-              <span>👥 ${meeting.participants.length} participants</span>
-              <span>📝 ${meeting.agendaItems.length} agenda items</span>
-            </div>
-            <div class="meeting-actions">
-              <button class="btn btn-sm" onclick="viewMeetingDetails('${meeting.id}')">View Details</button>
-              <button class="btn btn-sm btn-success" onclick="checkInToMeeting('${meeting.id}', '${currentUser.id}')">Check In</button>
-            </div>
-          `;
-          meetingList.appendChild(meetingCard);
-        });
-      }
-    }
-
-    if (emptyState) {
-      emptyState.style.display = hasMeetings ? 'none' : 'block';
-    }
+    
+    meetingsData.data.forEach(meeting => {
+      const meetingCard = document.createElement('div');
+      meetingCard.className = 'meeting-card';
+      meetingCard.innerHTML = `
+        ${meeting.flaggedForDeletion ? '<div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; padding: 0.5rem 1rem; border-radius: var(--radius-md) var(--radius-md) 0 0; font-size: 0.875rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;"><span>⚠️</span> Flagged for Deletion</div>' : ''}
+        <h4>📋 ${meeting.title}</h4>
+        <div class="meeting-info">
+          <span>🗓️ ${new Date(meeting.scheduledTime).toLocaleString()}</span>
+          <span>⏱️ ${meeting.duration} min</span>
+          <span>👥 ${meeting.participants.length} participants</span>
+          <span>📝 ${meeting.agendaItems.length} agenda items</span>
+          ${meeting.meetingLink ? '<span>🔗 Has video link</span>' : ''}
+        </div>
+        <div class="meeting-actions">
+          <button class="btn btn-sm" onclick="viewMeetingDetails('${meeting.id}')">View Details</button>
+          <button class="btn btn-sm btn-success" onclick="checkInToMeeting('${meeting.id}', '${currentUser.id}')">Check In</button>
+        </div>
+      `;
+      meetingList.appendChild(meetingCard);
+    });
   } catch (error) {
     console.error('Failed to load meetings:', error);
   }
@@ -480,6 +487,28 @@ const displayNotifications = (notifications) => {
 
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Planify client application loaded');
+  
+  // Setup autocomplete for event participant search
+  const eventParticipantSearchInput = document.getElementById('eventParticipantSearch');
+  if (eventParticipantSearchInput) {
+    eventParticipantSearchInput.addEventListener('input', () => {
+      clearTimeout(eventParticipantSearchTimeout);
+      eventParticipantSearchTimeout = setTimeout(() => {
+        searchEventParticipants();
+      }, 300); // 300ms debounce
+    });
+  }
+
+  // Setup autocomplete for organization search
+  const joinOrgSearchInput = document.getElementById('joinOrgSearch');
+  if (joinOrgSearchInput) {
+    joinOrgSearchInput.addEventListener('input', () => {
+      clearTimeout(organizationSearchTimeout);
+      organizationSearchTimeout = setTimeout(() => {
+        searchOrganizations();
+      }, 300); // 300ms debounce
+    });
+  }
   
   // Tab navigation
   const tabButtons = document.querySelectorAll('.nav-tabs button');
@@ -837,6 +866,18 @@ Follow-up Required:
           <div style="background: var(--primary-gradient); padding: 2rem; border-radius: var(--radius-lg); margin-bottom: 1.5rem; color: white;">
             <h2 style="margin: 0 0 0.5rem 0; font-size: 2rem;">${meeting.title}</h2>
             <p style="margin: 0; opacity: 0.9;">${meeting.description || 'No description provided'}</p>
+            ${meeting.meetingLink ? `
+              <div style="margin-top: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                <a href="${meeting.meetingLink}" target="_blank" rel="noopener noreferrer" 
+                   style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); color: white; text-decoration: none; border-radius: var(--radius-full); font-weight: 600; transition: all 0.2s ease; border: 2px solid rgba(255,255,255,0.3);"
+                   onmouseover="this.style.background='rgba(255,255,255,0.3)'; this.style.transform='translateY(-2px)'"
+                   onmouseout="this.style.background='rgba(255,255,255,0.2)'; this.style.transform='translateY(0)'">
+                  <span style="font-size: 1.2rem;">🔗</span>
+                  <span>Join Meeting</span>
+                  <span style="font-size: 0.875rem;">↗</span>
+                </a>
+              </div>
+            ` : ''}
           </div>
 
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
@@ -866,8 +907,11 @@ Follow-up Required:
           </div>
 
           <div style="background: white; padding: 1.5rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); margin-bottom: 1rem;">
-            <h3 style="margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem;">
-              <span>👥</span> Participants
+            <h3 style="margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem; justify-content: space-between;">
+              <span style="display: flex; align-items: center; gap: 0.5rem;">
+                <span>👥</span> Participants
+              </span>
+              <div id="add-participant-btn-${meeting.id}"></div>
             </h3>
             <div style="display: flex; flex-direction: column; gap: 0.75rem;">
               ${meeting.participants.map(p => {
@@ -956,6 +1000,9 @@ Follow-up Required:
 
         // Load actions based on user permissions
         loadMeetingActions(meeting.id, meeting.flaggedForDeletion);
+        
+        // Load add participant button if user has permission
+        loadAddParticipantButton(meeting.id, meeting.createdBy);
 
         detailModal.classList.add('active');
       }
@@ -1008,6 +1055,169 @@ Follow-up Required:
       actionsContainer.innerHTML = '';
     }
   }
+
+  // Load add participant button based on permissions
+  async function loadAddParticipantButton(meetingId, createdBy) {
+    if (!currentUser) return;
+
+    const buttonContainer = document.getElementById(`add-participant-btn-${meetingId}`);
+    if (!buttonContainer) return;
+
+    try {
+      // Check if current user is the creator
+      const isCreator = createdBy === currentUser.id;
+
+      // Check if current user is an admin
+      let isAdmin = false;
+      const orgResponse = await fetch(`${API_URL}/organizations/user/${currentUser.id}`);
+      const orgData = await orgResponse.json();
+      if (orgData.success && orgData.data && orgData.data.length > 0) {
+        const org = orgData.data[0];
+        isAdmin = org.adminIds.includes(currentUser.id);
+      }
+
+      // Show button only if creator or admin
+      if (isCreator || isAdmin) {
+        buttonContainer.innerHTML = `
+          <button class="btn btn-sm" onclick="showAddParticipantModal('${meetingId}')" style="font-size: 0.875rem;">
+            ➕ Add Participant
+          </button>
+        `;
+      }
+    } catch (error) {
+      console.error('Failed to load add participant button:', error);
+    }
+  }
+
+  // Show modal to add participant
+  window.showAddParticipantModal = async function(meetingId) {
+    // Load organization members
+    try {
+      const orgResponse = await fetch(`${API_URL}/organizations/user/${currentUser.id}`);
+      const orgData = await orgResponse.json();
+      
+      if (!orgData.success || !orgData.data || orgData.data.length === 0) {
+        showToast('You must be in an organization to add participants', 'warning', 'No Organization');
+        return;
+      }
+
+      const org = orgData.data[0];
+      
+      // Get current meeting to check existing participants
+      const meetingResponse = await fetch(`${API_URL}/meetings/${meetingId}`);
+      const meetingData = await meetingResponse.json();
+      
+      if (!meetingData.success) {
+        showToast('Failed to load meeting', 'error', 'Error');
+        return;
+      }
+
+      const existingParticipantIds = meetingData.data.participants.map(p => p.userId);
+
+      // Fetch usernames for members
+      const memberPromises = org.memberIds.map(async (userId) => {
+        try {
+          const userResponse = await fetch(`${API_URL}/auth/user/${userId}`);
+          const userData = await userResponse.json();
+          return {
+            id: userId,
+            username: userData.data?.username || 'Unknown User',
+            isAlreadyParticipant: existingParticipantIds.includes(userId)
+          };
+        } catch {
+          return { id: userId, username: 'Unknown User', isAlreadyParticipant: existingParticipantIds.includes(userId) };
+        }
+      });
+
+      const members = await Promise.all(memberPromises);
+      const availableMembers = members.filter(m => !m.isAlreadyParticipant);
+
+      if (availableMembers.length === 0) {
+        showToast('All organization members are already participants', 'info', 'No Available Members');
+        return;
+      }
+
+      // Create a simple selection UI
+      const membersHtml = availableMembers.map(member => `
+        <div style="padding: 0.75rem; background: white; border-radius: var(--radius-md); border: 1px solid var(--border-color); cursor: pointer; transition: all 0.2s;"
+             onclick="addParticipantToMeeting('${meetingId}', '${member.id}')"
+             onmouseover="this.style.background='var(--gray-50)'; this.style.borderColor='var(--primary-color)'"
+             onmouseout="this.style.background='white'; this.style.borderColor='var(--border-color)'">
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <div style="width: 32px; height: 32px; border-radius: var(--radius-full); background: var(--primary-gradient); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.875rem;">
+              ${member.username.charAt(0).toUpperCase()}
+            </div>
+            <div style="font-weight: 600;">${member.username}</div>
+          </div>
+        </div>
+      `).join('');
+
+      // Show in a toast-like notification with longer duration
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+
+      const modal = document.createElement('div');
+      modal.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 2rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); max-width: 500px; max-height: 600px; overflow-y: auto; z-index: 10000; width: 90%;';
+      modal.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h3 style="margin: 0;">Add Participant</h3>
+          <button onclick="this.parentElement.parentElement.remove(); document.getElementById('modal-backdrop').remove()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary);">&times;</button>
+        </div>
+        <p style="margin-bottom: 1rem; color: var(--text-secondary);">Select a member to add to this meeting:</p>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          ${membersHtml}
+        </div>
+      `;
+
+      // Add backdrop
+      const backdrop = document.createElement('div');
+      backdrop.id = 'modal-backdrop';
+      backdrop.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999;';
+      backdrop.onclick = () => {
+        modal.remove();
+        backdrop.remove();
+      };
+
+      document.body.appendChild(backdrop);
+      document.body.appendChild(modal);
+    } catch (error) {
+      console.error('Failed to show add participant modal:', error);
+      showToast('Unable to load participants', 'error', 'Error');
+    }
+  };
+
+  // Add participant to meeting
+  window.addParticipantToMeeting = async function(meetingId, userId) {
+    if (!currentUser) return;
+
+    try {
+      const response = await fetch(`${API_URL}/meetings/${meetingId}/participants`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, requesterId: currentUser.id }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showToast('Participant added successfully!', 'success', 'Success');
+        // Close modal
+        document.getElementById('modal-backdrop')?.remove();
+        document.querySelectorAll('div').forEach(el => {
+          if (el.style.cssText.includes('position: fixed') && el.style.cssText.includes('transform: translate(-50%, -50%)')) {
+            el.remove();
+          }
+        });
+        // Refresh meeting details
+        await viewMeetingDetails(meetingId);
+      } else {
+        showToast(data.message || 'Failed to add participant', 'error', 'Error');
+      }
+    } catch (error) {
+      console.error('Add participant error:', error);
+      showToast('Unable to add participant', 'error', 'Error');
+    }
+  };
 
   // Flag meeting for deletion
   window.flagMeeting = async function(meetingId) {
@@ -1296,6 +1506,8 @@ window.submitMeetingForm = async function() {
     eventId: eventId,
     scheduledTime: new Date(formData.get('scheduledTime')),
     duration: parseInt(formData.get('duration')),
+    meetingLink: formData.get('meetingLink') || undefined,
+    createdBy: currentUser.id,
     organizerId: currentUser.id,
     participants: meetingParticipants,
     agendaItems: agendaItems,
@@ -2235,12 +2447,19 @@ window.rejectJoinRequest = async function(requestId) {
 };
 
 // Search for organization members to add as participants
+// Debounce function for autocomplete
+let eventParticipantSearchTimeout;
+let organizationSearchTimeout;
+
 window.searchEventParticipants = async function() {
   const searchInput = document.getElementById('eventParticipantSearch');
   const searchValue = searchInput.value.trim();
 
+  const resultsContainer = document.getElementById('eventParticipantSearchResults');
+  const resultsList = document.getElementById('eventParticipantResultsList');
+
   if (!searchValue) {
-    showToast('Please enter a username or user ID', 'warning', 'Missing Information');
+    resultsContainer.style.display = 'none';
     return;
   }
 
@@ -2252,7 +2471,8 @@ window.searchEventParticipants = async function() {
     const orgData = await orgResponse.json();
 
     if (!orgData.success || !orgData.data || orgData.data.length === 0) {
-      showToast('You must be in an organization to add participants', 'warning', 'No Organization');
+      resultsList.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 1rem;">You must be in an organization</p>';
+      resultsContainer.style.display = 'block';
       return;
     }
 
@@ -2279,9 +2499,6 @@ window.searchEventParticipants = async function() {
       member.id.toLowerCase().includes(searchValue.toLowerCase()) ||
       member.username.toLowerCase().includes(searchValue.toLowerCase())
     );
-
-    const resultsContainer = document.getElementById('eventParticipantSearchResults');
-    const resultsList = document.getElementById('eventParticipantResultsList');
 
     if (results.length === 0) {
       resultsList.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 1rem;">No members found</p>';
@@ -2310,7 +2527,8 @@ window.searchEventParticipants = async function() {
     resultsContainer.style.display = 'block';
   } catch (error) {
     console.error('Search participants error:', error);
-    showToast('Failed to search participants', 'error', 'Error');
+    resultsList.innerHTML = '<p style="text-align: center; color: var(--error); padding: 1rem;">Failed to search participants</p>';
+    resultsContainer.style.display = 'block';
   }
 };
 
@@ -2325,7 +2543,13 @@ window.addEventParticipantById = function(userId, username) {
   eventParticipantUsernames[userId] = username;
 
   renderEventParticipants();
-  searchEventParticipants(); // Refresh search results
+  
+  // Clear search after adding
+  const searchInput = document.getElementById('eventParticipantSearch');
+  if (searchInput) searchInput.value = '';
+  const resultsContainer = document.getElementById('eventParticipantSearchResults');
+  if (resultsContainer) resultsContainer.style.display = 'none';
+  
   showToast(`${username} added to event`, 'success', 'Participant Added');
 };
 

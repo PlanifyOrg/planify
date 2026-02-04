@@ -24,8 +24,8 @@ export class MeetingService {
 
     // Insert meeting
     const stmt = db.prepare(`
-      INSERT INTO meetings (id, event_id, title, description, scheduled_time, duration, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO meetings (id, event_id, title, description, scheduled_time, duration, meeting_link, created_by, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -35,18 +35,23 @@ export class MeetingService {
       meetingData.description,
       meetingData.scheduledTime.toISOString(),
       meetingData.duration,
+      meetingData.meetingLink || null,
+      meetingData.createdBy,
       MeetingStatus.PROPOSED,
       now,
       now
     );
 
-    // Add participants
+    // Add participants (including creator if not already in list)
     const participantStmt = db.prepare(`
       INSERT INTO meeting_participants (meeting_id, user_id)
       VALUES (?, ?)
     `);
 
-    meetingData.participants.forEach((userId) => {
+    // Ensure creator is always a participant
+    const allParticipants = new Set([meetingData.createdBy, ...meetingData.participants]);
+    
+    allParticipants.forEach((userId) => {
       participantStmt.run(meetingId, userId);
     });
 
@@ -142,6 +147,14 @@ export class MeetingService {
       flaggedByUsername = userRow?.username || 'Unknown User';
     }
 
+    // Get createdBy username
+    let createdByUsername: string | undefined = undefined;
+    if (row.created_by) {
+      const creatorStmt = db.prepare('SELECT username FROM users WHERE id = ?');
+      const creatorRow = creatorStmt.get(row.created_by) as any;
+      createdByUsername = creatorRow?.username || 'Unknown User';
+    }
+
     return {
       id: row.id,
       eventId: row.event_id,
@@ -149,6 +162,9 @@ export class MeetingService {
       description: row.description,
       scheduledTime: new Date(row.scheduled_time),
       duration: row.duration,
+      meetingLink: row.meeting_link || undefined,
+      createdBy: row.created_by || '',
+      createdByUsername,
       participants,
       agendaItems,
       documents,
@@ -168,6 +184,32 @@ export class MeetingService {
   public getMeetingsByEventId(eventId: string): Meeting[] {
     const stmt = db.prepare('SELECT id FROM meetings WHERE event_id = ? ORDER BY scheduled_time');
     const rows = stmt.all(eventId) as any[];
+    
+    return rows.map(row => this.getMeetingById(row.id)!).filter(m => m !== undefined);
+  }
+
+  /**
+   * Get all meetings for a user (by meeting participation, not just event participation)
+   */
+  public getMeetingsByUserId(userId: string): Meeting[] {
+    const stmt = db.prepare(`
+      SELECT DISTINCT m.id 
+      FROM meetings m
+      INNER JOIN meeting_participants mp ON m.id = mp.meeting_id
+      WHERE mp.user_id = ?
+      ORDER BY m.scheduled_time
+    `);
+    const rows = stmt.all(userId) as any[];
+    
+    return rows.map(row => this.getMeetingById(row.id)!).filter(m => m !== undefined);
+  }
+
+  /**
+   * Get all meetings in the system (for admins)
+   */
+  public getAllMeetings(): Meeting[] {
+    const stmt = db.prepare('SELECT id FROM meetings ORDER BY scheduled_time');
+    const rows = stmt.all() as any[];
     
     return rows.map(row => this.getMeetingById(row.id)!).filter(m => m !== undefined);
   }
@@ -199,6 +241,10 @@ export class MeetingService {
     if (updateData.duration !== undefined) {
       updates.push('duration = ?');
       values.push(updateData.duration);
+    }
+    if (updateData.meetingLink !== undefined) {
+      updates.push('meeting_link = ?');
+      values.push(updateData.meetingLink || null);
     }
     if (updateData.status !== undefined) {
       updates.push('status = ?');

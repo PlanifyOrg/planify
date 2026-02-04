@@ -233,6 +233,38 @@ export function initializeDatabase(): void {
     console.error('Migration warning:', error);
   }
 
+  // Migration: Add meeting_link column if it doesn't exist
+  try {
+    const tableInfo = db.prepare('PRAGMA table_info(meetings)').all() as any[];
+    const hasMeetingLink = tableInfo.some(col => col.name === 'meeting_link');
+    
+    if (!hasMeetingLink) {
+      console.log('Running migration: Adding meeting_link column to meetings table...');
+      db.exec(`
+        ALTER TABLE meetings ADD COLUMN meeting_link TEXT;
+      `);
+      console.log('✓ Migration completed successfully');
+    }
+  } catch (error) {
+    console.error('Migration warning:', error);
+  }
+
+  // Migration: Add created_by column if it doesn't exist
+  try {
+    const tableInfo = db.prepare('PRAGMA table_info(meetings)').all() as any[];
+    const hasCreatedBy = tableInfo.some(col => col.name === 'created_by');
+    
+    if (!hasCreatedBy) {
+      console.log('Running migration: Adding created_by column to meetings table...');
+      db.exec(`
+        ALTER TABLE meetings ADD COLUMN created_by TEXT;
+      `);
+      console.log('✓ Migration completed successfully');
+    }
+  } catch (error) {
+    console.error('Migration warning:', error);
+  }
+
   console.log('✓ Database tables created successfully');
 }
 

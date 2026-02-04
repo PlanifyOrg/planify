@@ -50,12 +50,14 @@ export class MeetingController {
         duration,
         participants,
         agendaItems,
+        meetingLink,
+        createdBy,
       } = req.body;
 
-      if (!eventId || !title || !scheduledTime || !duration) {
+      if (!eventId || !title || !scheduledTime || !duration || !createdBy) {
         res.status(400).json({
           success: false,
-          message: 'eventId, title, scheduledTime, and duration are required',
+          message: 'eventId, title, scheduledTime, duration, and createdBy are required',
         });
         return;
       }
@@ -66,6 +68,8 @@ export class MeetingController {
         description: description || '',
         scheduledTime: new Date(scheduledTime),
         duration: Number(duration),
+        meetingLink,
+        createdBy,
         participants: participants || [],
         agendaItems: agendaItems || [],
       };
@@ -142,6 +146,59 @@ export class MeetingController {
   };
 
   /**
+   * Get all meetings for a user (by meeting participation)
+   * GET /api/meetings/user/:userId
+   */
+  public getMeetingsByUserId = async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const { userId } = req.params;
+      const { includeAll } = req.query;
+
+      // If includeAll is true, check if user is admin and return all meetings
+      if (includeAll === 'true') {
+        try {
+          const orgResponse = await fetch(`http://localhost:3000/api/organizations/user/${userId}`);
+          const orgData = await orgResponse.json() as any;
+          
+          if (orgData.success && orgData.data && orgData.data.length > 0) {
+            const org = orgData.data[0];
+            const isAdmin = org.adminIds.includes(userId);
+            
+            if (isAdmin) {
+              // Return all meetings for admins
+              const allMeetings = this.meetingService.getAllMeetings();
+              res.status(200).json({
+                success: true,
+                data: allMeetings,
+              });
+              return;
+            }
+          }
+        } catch (error) {
+          console.error('Failed to check admin status:', error);
+        }
+      }
+
+      // Return only meetings where user is a participant
+      const meetings = this.meetingService.getMeetingsByUserId(userId);
+
+      res.status(200).json({
+        success: true,
+        data: meetings,
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch meetings',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
+  /**
    * Update meeting
    * PUT /api/meetings/:id
    */
@@ -187,12 +244,47 @@ export class MeetingController {
   public addParticipant = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const { userId } = req.body;
+      const { userId, requesterId } = req.body;
 
-      if (!userId) {
+      if (!userId || !requesterId) {
         res.status(400).json({
           success: false,
-          message: 'userId is required',
+          message: 'userId and requesterId are required',
+        });
+        return;
+      }
+
+      // Get the meeting to check creator
+      const meeting = this.meetingService.getMeetingById(id);
+      if (!meeting) {
+        res.status(404).json({
+          success: false,
+          message: 'Meeting not found',
+        });
+        return;
+      }
+
+      // Check if requester is the meeting creator
+      const isCreator = meeting.createdBy === requesterId;
+
+      // Check if requester is an admin (by checking their organization)
+      let isAdmin = false;
+      try {
+        const orgResponse = await fetch(`http://localhost:3000/api/organizations/user/${requesterId}`);
+        const orgData = await orgResponse.json() as any;
+        if (orgData.success && orgData.data && orgData.data.length > 0) {
+          const org = orgData.data[0];
+          isAdmin = org.adminIds.includes(requesterId);
+        }
+      } catch (error) {
+        console.error('Failed to check admin status:', error);
+      }
+
+      // Only allow creator or admin to add participants
+      if (!isCreator && !isAdmin) {
+        res.status(403).json({
+          success: false,
+          message: 'Only the meeting creator or organization admins can add participants',
         });
         return;
       }
@@ -202,7 +294,7 @@ export class MeetingController {
       if (!success) {
         res.status(400).json({
           success: false,
-          message: 'Failed to add participant',
+          message: 'Failed to add participant (participant may already exist)',
         });
         return;
       }
