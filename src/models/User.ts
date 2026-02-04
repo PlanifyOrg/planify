@@ -7,6 +7,7 @@ export interface User {
   email: string;
   passwordHash: string;
   role: UserRole;
+  organizationId?: string; // Optional: User's organization
   createdAt: Date;
   updatedAt: Date;
 }
@@ -22,4 +23,5 @@ export interface CreateUserDto {
   email: string;
   password: string;
   role?: UserRole;
+  organizationId?: string;
 }

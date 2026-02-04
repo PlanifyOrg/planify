@@ -17,6 +17,33 @@ db.pragma('foreign_keys = ON');
 export function initializeDatabase(): void {
   console.log('Initializing database...');
 
+  // Organizations table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS organizations (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      logo TEXT,
+      website TEXT,
+      settings TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Organization members table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS organization_members (
+      organization_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      is_admin INTEGER DEFAULT 0,
+      joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (organization_id, user_id),
+      FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
   // Users table
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -25,8 +52,10 @@ export function initializeDatabase(): void {
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL,
+      organization_id TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL
     )
   `);
 
@@ -37,13 +66,15 @@ export function initializeDatabase(): void {
       title TEXT NOT NULL,
       description TEXT,
       organizer_id TEXT NOT NULL,
+      organization_id TEXT,
       start_date DATETIME NOT NULL,
       end_date DATETIME NOT NULL,
       location TEXT,
       status TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (organizer_id) REFERENCES users(id) ON DELETE CASCADE
+      FOREIGN KEY (organizer_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL
     )
   `);
 

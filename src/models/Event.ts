@@ -6,6 +6,7 @@ export interface Event {
   title: string;
   description: string;
   organizerId: string;
+  organizationId?: string; // Optional: Organization this event belongs to
   startDate: Date;
   endDate: Date;
   location: string;
