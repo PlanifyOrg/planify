@@ -76,6 +76,28 @@ export class MeetingController {
 
       const meeting = this.meetingService.createMeeting(meetingData);
 
+      // Send notifications to all participants (except creator)
+      try {
+        const creator = this.authService.getUserById(createdBy);
+        const creatorName = creator ? creator.username : 'Someone';
+        
+        meeting.participants.forEach(participant => {
+          if (participant.userId !== createdBy) {
+            this.notificationService.createNotification({
+              recipientId: participant.userId,
+              senderId: createdBy,
+              type: NotificationType.MEETING_SCHEDULED,
+              title: '📋 Meeting Invitation',
+              message: `${creatorName} invited you to the meeting "${meeting.title}"`,
+              relatedEntityId: meeting.id,
+            });
+          }
+        });
+      } catch (notificationError) {
+        console.error('Failed to send notifications:', notificationError);
+        // Continue anyway - meeting was created successfully
+      }
+
       res.status(201).json({
         success: true,
         message: 'Meeting created successfully',
@@ -297,6 +319,24 @@ export class MeetingController {
           message: 'Failed to add participant (participant may already exist)',
         });
         return;
+      }
+
+      // Send notification to the added participant
+      try {
+        const adder = this.authService.getUserById(requesterId);
+        const adderName = adder ? adder.username : 'Someone';
+        
+        this.notificationService.createNotification({
+          recipientId: userId,
+          senderId: requesterId,
+          type: NotificationType.MEETING_SCHEDULED,
+          title: '📋 Added to Meeting',
+          message: `${adderName} added you as a participant to the meeting "${meeting.title}"`,
+          relatedEntityId: id,
+        });
+      } catch (notificationError) {
+        console.error('Failed to send notification:', notificationError);
+        // Continue anyway - participant was added successfully
       }
 
       res.status(200).json({

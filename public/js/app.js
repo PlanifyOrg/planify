@@ -899,11 +899,6 @@ Follow-up Required:
               <div style="font-size: 1.25rem; font-weight: 600;">${checkedInCount}/${meeting.participants.length}</div>
               <div style="font-size: 0.875rem; opacity: 0.9;">checked in</div>
             </div>
-            <div style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); padding: 1.5rem; border-radius: var(--radius-lg); color: white;">
-              <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
-              <div style="font-size: 0.875rem; opacity: 0.9;">Status</div>
-              <div style="font-size: 1.25rem; font-weight: 600; text-transform: uppercase;">${meeting.status}</div>
-            </div>
           </div>
 
           <div style="background: white; padding: 1.5rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); margin-bottom: 1rem;">

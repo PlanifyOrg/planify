@@ -32,7 +32,7 @@ const organizationService = new OrganizationService();
 
 // Initialize controllers
 const authController = new AuthController(authService);
-const eventController = new EventController(eventService);
+const eventController = new EventController(eventService, notificationService, authService);
 const notificationController = new NotificationController(notificationService);
 const meetingController = new MeetingController(
   meetingService,
@@ -60,7 +60,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
   res.status(200).json({
     success: true,
     message: 'Planify API is running',
-    version: '0.1.0',
+    version: '1.0.0',
   });
 });
 

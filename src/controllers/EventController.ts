@@ -4,12 +4,23 @@
 import { Request, Response } from 'express';
 import { EventService } from '../services/EventService';
 import { CreateEventDto, UpdateEventDto } from '../models/Event';
+import { NotificationService } from '../services/NotificationService';
+import { AuthService } from '../services/AuthService';
+import { NotificationType } from '../models/Notification';
 
 export class EventController {
   private eventService: EventService;
+  private notificationService: NotificationService;
+  private authService: AuthService;
 
-  constructor(eventService: EventService) {
+  constructor(
+    eventService: EventService,
+    notificationService: NotificationService,
+    authService: AuthService
+  ) {
     this.eventService = eventService;
+    this.notificationService = notificationService;
+    this.authService = authService;
   }
 
   /**
@@ -184,6 +195,27 @@ export class EventController {
           message: 'Failed to add participant (event not found or already participant)',
         });
         return;
+      }
+
+      // Send notification to the added participant
+      try {
+        const event = this.eventService.getEventById(id);
+        if (event) {
+          const organizer = this.authService.getUserById(event.organizerId);
+          const organizerName = organizer ? organizer.username : 'Someone';
+          
+          this.notificationService.createNotification({
+            recipientId: userId,
+            senderId: event.organizerId,
+            type: NotificationType.EVENT_UPDATE,
+            title: '📅 Added to Event',
+            message: `${organizerName} added you as a participant to the event "${event.title}"`,
+            relatedEntityId: id,
+          });
+        }
+      } catch (notificationError) {
+        console.error('Failed to send notification:', notificationError);
+        // Continue anyway - participant was added successfully
       }
 
       res.status(200).json({
