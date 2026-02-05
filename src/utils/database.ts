@@ -365,6 +365,75 @@ export function initializeDatabase(): void {
     )
   `);
 
+  // Migration: Update tasks table with new columns
+  try {
+    const tableInfo = db.prepare('PRAGMA table_info(tasks)').all() as any[];
+    const hasCreatedBy = tableInfo.some(col => col.name === 'createdBy');
+    const hasOrder = tableInfo.some(col => col.name === 'order');
+    
+    if (!hasCreatedBy || !hasOrder) {
+      console.log('Running migration: Updating tasks table with new schema...');
+      
+      // SQLite doesn't support ALTER COLUMN, so we need to recreate the table
+      db.exec(`
+        -- Create new tasks table with updated schema
+        CREATE TABLE tasks_new (
+          id TEXT PRIMARY KEY,
+          eventId TEXT NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT,
+          assignedTo TEXT NOT NULL DEFAULT '[]',
+          volunteers TEXT NOT NULL DEFAULT '[]',
+          dueDate DATETIME NOT NULL,
+          priority TEXT NOT NULL,
+          status TEXT NOT NULL,
+          phase TEXT NOT NULL DEFAULT 'todo',
+          tags TEXT NOT NULL DEFAULT '[]',
+          estimatedHours REAL,
+          actualHours REAL,
+          createdBy TEXT NOT NULL,
+          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          completedAt DATETIME,
+          "order" INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY (eventId) REFERENCES events(id) ON DELETE CASCADE,
+          FOREIGN KEY (createdBy) REFERENCES users(id) ON DELETE CASCADE
+        );
+        
+        -- Copy existing data if the old table has data
+        INSERT OR IGNORE INTO tasks_new (id, eventId, title, description, dueDate, priority, status, createdBy, createdAt, updatedAt, assignedTo, volunteers, phase, tags, "order")
+        SELECT 
+          id, 
+          event_id, 
+          title, 
+          COALESCE(description, ''), 
+          due_date, 
+          priority, 
+          status,
+          COALESCE((SELECT id FROM users LIMIT 1), 'unknown'),
+          created_at,
+          updated_at,
+          '[]',
+          '[]',
+          'todo',
+          '[]',
+          0
+        FROM tasks
+        WHERE EXISTS (SELECT 1 FROM tasks LIMIT 1);
+        
+        -- Drop old table
+        DROP TABLE IF EXISTS tasks;
+        
+        -- Rename new table
+        ALTER TABLE tasks_new RENAME TO tasks;
+      `);
+      
+      console.log('✓ Migration completed: Tasks table updated successfully');
+    }
+  } catch (error) {
+    console.error('Migration warning:', error);
+  }
+
   console.log('✓ Database tables created successfully');
 }
 
