@@ -8,16 +8,13 @@ import {
   UpdateTaskDto,
   TaskPhase,
   TaskStatus,
-  TaskPriority,
   TaskNote,
   AddTaskNoteDto,
   VolunteerTaskDto,
 } from '../models/Task';
-import { getDatabase } from '../utils/database';
+import { db } from '../utils/database';
 
 export class TaskService {
-  private db = getDatabase();
-
   /**
    * Create a new task
    */
@@ -44,7 +41,7 @@ export class TaskService {
     };
 
     // Store task
-    const stmt = this.db.prepare(`
+    const stmt = db.prepare(`
       INSERT INTO tasks (
         id, eventId, title, description, assignedTo, volunteers, dueDate, 
         priority, status, phase, tags, estimatedHours, actualHours,
@@ -80,7 +77,7 @@ export class TaskService {
    * Get task by ID
    */
   getTaskById(id: string): Task | null {
-    const stmt = this.db.prepare('SELECT * FROM tasks WHERE id = ?');
+    const stmt = db.prepare('SELECT * FROM tasks WHERE id = ?');
     const row = stmt.get(id) as any;
     return row ? this.mapRowToTask(row) : null;
   }
@@ -89,7 +86,7 @@ export class TaskService {
    * Get all tasks for an event
    */
   getTasksByEventId(eventId: string): Task[] {
-    const stmt = this.db.prepare('SELECT * FROM tasks WHERE eventId = ? ORDER BY "order" ASC');
+    const stmt = db.prepare('SELECT * FROM tasks WHERE eventId = ? ORDER BY "order" ASC');
     const rows = stmt.all(eventId) as any[];
     return rows.map(row => this.mapRowToTask(row));
   }
@@ -98,7 +95,7 @@ export class TaskService {
    * Get tasks by user ID (assigned to or created by)
    */
   getTasksByUserId(userId: string): Task[] {
-    const stmt = this.db.prepare('SELECT * FROM tasks WHERE createdBy = ?');
+    const stmt = db.prepare('SELECT * FROM tasks WHERE createdBy = ?');
     const rows = stmt.all(userId) as any[];
     const tasks = rows.map(row => this.mapRowToTask(row));
     
@@ -114,7 +111,7 @@ export class TaskService {
    * Get tasks by phase for a specific event
    */
   getTasksByPhase(eventId: string, phase: TaskPhase): Task[] {
-    const stmt = this.db.prepare('SELECT * FROM tasks WHERE eventId = ? AND phase = ? ORDER BY "order" ASC');
+    const stmt = db.prepare('SELECT * FROM tasks WHERE eventId = ? AND phase = ? ORDER BY "order" ASC');
     const rows = stmt.all(eventId, phase) as any[];
     return rows.map(row => this.mapRowToTask(row));
   }
@@ -137,7 +134,7 @@ export class TaskService {
       updatedTask.completedAt = new Date();
     }
 
-    const stmt = this.db.prepare(`
+    const stmt = db.prepare(`
       UPDATE tasks SET
         title = ?, description = ?, assignedTo = ?, dueDate = ?,
         priority = ?, status = ?, phase = ?, tags = ?,
@@ -221,7 +218,7 @@ export class TaskService {
     if (!task.volunteers.includes(data.userId)) {
       task.volunteers.push(data.userId);
       
-      const stmt = this.db.prepare('UPDATE tasks SET volunteers = ?, updatedAt = ? WHERE id = ?');
+      const stmt = db.prepare('UPDATE tasks SET volunteers = ?, updatedAt = ? WHERE id = ?');
       stmt.run(
         JSON.stringify(task.volunteers),
         new Date().toISOString(),
@@ -241,7 +238,7 @@ export class TaskService {
 
     task.volunteers = task.volunteers.filter(id => id !== userId);
     
-    const stmt = this.db.prepare('UPDATE tasks SET volunteers = ?, updatedAt = ? WHERE id = ?');
+    const stmt = db.prepare('UPDATE tasks SET volunteers = ?, updatedAt = ? WHERE id = ?');
     stmt.run(
       JSON.stringify(task.volunteers),
       new Date().toISOString(),
@@ -267,7 +264,7 @@ export class TaskService {
       createdAt: new Date(),
     };
 
-    const stmt = this.db.prepare(`
+    const stmt = db.prepare(`
       INSERT INTO task_notes (id, taskId, userId, username, content, createdAt)
       VALUES (?, ?, ?, ?, ?, ?)
     `);
@@ -282,7 +279,7 @@ export class TaskService {
     );
 
     // Update task updatedAt
-    this.db.prepare('UPDATE tasks SET updatedAt = ? WHERE id = ?')
+    db.prepare('UPDATE tasks SET updatedAt = ? WHERE id = ?')
       .run(new Date().toISOString(), data.taskId);
 
     return note;
@@ -292,7 +289,7 @@ export class TaskService {
    * Get notes for a task
    */
   getTaskNotes(taskId: string): TaskNote[] {
-    const stmt = this.db.prepare('SELECT * FROM task_notes WHERE taskId = ? ORDER BY createdAt DESC');
+    const stmt = db.prepare('SELECT * FROM task_notes WHERE taskId = ? ORDER BY createdAt DESC');
     const rows = stmt.all(taskId) as any[];
     return rows.map(row => ({
       id: row.id,
@@ -309,10 +306,10 @@ export class TaskService {
    */
   deleteTask(id: string): boolean {
     // Delete notes first
-    this.db.prepare('DELETE FROM task_notes WHERE taskId = ?').run(id);
+    db.prepare('DELETE FROM task_notes WHERE taskId = ?').run(id);
     
     // Delete task
-    const stmt = this.db.prepare('DELETE FROM tasks WHERE id = ?');
+    const stmt = db.prepare('DELETE FROM tasks WHERE id = ?');
     const result = stmt.run(id);
     return result.changes > 0;
   }
@@ -321,7 +318,7 @@ export class TaskService {
    * Helper: Get next order number for a phase
    */
   private getNextOrderInPhase(eventId: string, phase: TaskPhase): number {
-    const stmt = this.db.prepare('SELECT MAX("order") as maxOrder FROM tasks WHERE eventId = ? AND phase = ?');
+    const stmt = db.prepare('SELECT MAX("order") as maxOrder FROM tasks WHERE eventId = ? AND phase = ?');
     const row = stmt.get(eventId, phase) as any;
     return (row?.maxOrder || 0) + 1;
   }

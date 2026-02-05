@@ -6,6 +6,7 @@ import { TaskService } from '../services/TaskService';
 import { AuthService } from '../services/AuthService';
 import { NotificationService } from '../services/NotificationService';
 import { CreateTaskDto, UpdateTaskDto, TaskPhase } from '../models/Task';
+import { NotificationType } from '../models/Notification';
 
 export class TaskController {
   constructor(
@@ -38,12 +39,11 @@ export class TaskController {
         for (const userId of data.assignedTo) {
           if (userId !== createdBy) {
             this.notificationService.createNotification({
-              userId,
-              type: 'task_assigned',
+              recipientId: userId,
+              type: NotificationType.TASK_ASSIGNED,
               title: 'New Task Assignment',
               message: `${creator?.username || 'Someone'} assigned you to task: ${task.title}`,
               relatedEntityId: task.id,
-              relatedEntityType: 'task',
             });
           }
         }
@@ -233,12 +233,11 @@ export class TaskController {
       if (assignedBy && userId !== assignedBy) {
         const assigner = this.authService.getUserById(assignedBy);
         this.notificationService.createNotification({
-          userId,
-          type: 'task_assigned',
+          recipientId: userId,
+          type: NotificationType.TASK_ASSIGNED,
           title: 'Task Assignment',
           message: `${assigner?.username || 'Someone'} assigned you to: ${task.title}`,
           relatedEntityId: task.id,
-          relatedEntityType: 'task',
         });
       }
 
@@ -315,12 +314,11 @@ export class TaskController {
       const volunteer = this.authService.getUserById(userId);
       if (task.createdBy !== userId) {
         this.notificationService.createNotification({
-          userId: task.createdBy,
-          type: 'task_volunteer',
+          recipientId: task.createdBy,
+          type: NotificationType.TASK_VOLUNTEER,
           title: 'New Task Volunteer',
           message: `${volunteer?.username || 'Someone'} volunteered for: ${task.title}`,
           relatedEntityId: task.id,
-          relatedEntityType: 'task',
         });
       }
 

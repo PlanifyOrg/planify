@@ -628,6 +628,12 @@ document.addEventListener('DOMContentLoaded', () => {
         activeSection.classList.add('active');
       }
 
+      // Load tasks when tasks tab is clicked
+      if (tab === 'tasks' && currentUser) {
+        await loadTaskEventOptions();
+        await loadTasks(selectedEventForTasks);
+      }
+
       // Mark all notifications as read when viewing notifications tab
       if (tab === 'notifications' && currentUser) {
         try {
@@ -690,6 +696,43 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   } else {
     console.error('Login form not found!');
+  }
+
+  // Task button event listeners
+  const createTaskBtn = document.getElementById('createTaskBtn');
+  const createTaskBtnEmpty = document.getElementById('createTaskBtnEmpty');
+  if (createTaskBtn) {
+    createTaskBtn.addEventListener('click', () => {
+      if (!currentUser) {
+        showToast('Please login first to create tasks', 'warning', 'Authentication Required');
+        return;
+      }
+      openCreateTaskModal();
+    });
+  }
+  if (createTaskBtnEmpty) {
+    createTaskBtnEmpty.addEventListener('click', () => {
+      if (!currentUser) {
+        showToast('Please login first to create tasks', 'warning', 'Authentication Required');
+        return;
+      }
+      openCreateTaskModal();
+    });
+  }
+
+  // Task event filter
+  const taskEventFilter = document.getElementById('taskEventFilter');
+  if (taskEventFilter) {
+    taskEventFilter.addEventListener('change', (e) => {
+      selectedEventForTasks = e.target.value;
+      loadTasks(selectedEventForTasks);
+    });
+  }
+
+  // Task assignee search
+  const taskAssigneeSearch = document.getElementById('taskAssigneeSearch');
+  if (taskAssigneeSearch) {
+    taskAssigneeSearch.addEventListener('input', searchTaskAssignees);
   }
 
   // Create event button
@@ -1444,22 +1487,9 @@ Follow-up Required:
     }
   };
 
-  // Create task button
-  const createTaskBtn = document.getElementById('createTaskBtn');
-  if (createTaskBtn) {
-    createTaskBtn.addEventListener('click', () => {
-      if (!currentUser) {
-        showToast('Please login first to create tasks', 'warning', 'Authentication Required');
-        return;
-      }
-      showToast('Task creation feature coming soon!', 'info', 'Coming Soon');
-    });
-  }
-
   // Add empty state button listeners
   const createEventBtnEmpty = document.getElementById('createEventBtnEmpty');
   const createMeetingBtnEmpty = document.getElementById('createMeetingBtnEmpty');
-  const createTaskBtnEmpty = document.getElementById('createTaskBtnEmpty');
   const createOrganizationBtn = document.getElementById('createOrganizationBtn');
   const createOrganizationBtnEmpty = document.getElementById('createOrganizationBtnEmpty');
 
@@ -1468,11 +1498,6 @@ Follow-up Required:
   }
   if (createMeetingBtnEmpty) {
     createMeetingBtnEmpty.addEventListener('click', () => openMeetingModal());
-  }
-  if (createTaskBtnEmpty) {
-    createTaskBtnEmpty.addEventListener('click', () => {
-      showToast('Task creation feature coming soon!', 'info', 'Coming Soon');
-    });
   }
   if (createOrganizationBtn) {
     createOrganizationBtn.addEventListener('click', () => openOrganizationModal());
@@ -3221,6 +3246,338 @@ const renderTaskAssignees = () => {
       </div>
     `;
   }).join('');
+};
+
+// View task details
+window.viewTaskDetails = async function(taskId) {
+  try {
+    const response = await fetch(`${API_URL}/tasks/${taskId}`);
+    const data = await response.json();
+
+    if (!data.success) {
+      showToast('Failed to load task details', 'error');
+      return;
+    }
+
+    const task = data.data;
+    
+    // Load notes
+    const notesResponse = await fetch(`${API_URL}/tasks/${taskId}/notes`);
+    const notesData = await notesResponse.json();
+    const notes = notesData.success ? notesData.data : [];
+
+    // Load usernames for assigned users and volunteers
+    const allUserIds = [...new Set([...task.assignedTo, ...task.volunteers, task.createdBy])];
+    const usernames = {};
+    
+    await Promise.all(allUserIds.map(async (userId) => {
+      try {
+        const userResponse = await fetch(`${API_URL}/auth/user/${userId}`);
+        const userData = await userResponse.json();
+        usernames[userId] = userData.data?.username || 'Unknown User';
+      } catch {
+        usernames[userId] = 'Unknown User';
+      }
+    }));
+
+    const priorityEmojis = { low: '🟢', medium: '🟡', high: '🟠', urgent: '🔴' };
+    const phaseNames = {
+      backlog: '📋 Backlog',
+      todo: '📝 To Do',
+      in_progress: '⚙️ In Progress',
+      review: '👀 Review',
+      testing: '🧪 Testing',
+      done: '✅ Done'
+    };
+
+    const isVolunteered = task.volunteers.includes(currentUser.id);
+    const isAssigned = task.assignedTo.includes(currentUser.id);
+    const isCreator = task.createdBy === currentUser.id;
+
+    const content = `
+      <div class="task-detail-section">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: var(--spacing-lg);">
+          <div>
+            <h2 style="font-size: 1.75rem; margin-bottom: var(--spacing-sm);">${task.title}</h2>
+            <p style="color: var(--text-secondary);">${task.description || 'No description'}</p>
+          </div>
+          <span style="font-size: 2rem;">${priorityEmojis[task.priority]}</span>
+        </div>
+
+        <div class="task-info-grid">
+          <div class="task-info-item">
+            <span class="task-info-label">Priority</span>
+            <span class="task-info-value">${task.priority.toUpperCase()}</span>
+          </div>
+          <div class="task-info-item">
+            <span class="task-info-label">Phase</span>
+            <span class="task-info-value">${phaseNames[task.phase]}</span>
+          </div>
+          <div class="task-info-item">
+            <span class="task-info-label">Due Date</span>
+            <span class="task-info-value">${formatDate(new Date(task.dueDate))}</span>
+          </div>
+          <div class="task-info-item">
+            <span class="task-info-label">Estimated Hours</span>
+            <span class="task-info-value">${task.estimatedHours || 'Not set'}</span>
+          </div>
+          <div class="task-info-item">
+            <span class="task-info-label">Created By</span>
+            <span class="task-info-value">${usernames[task.createdBy]}</span>
+          </div>
+          <div class="task-info-item">
+            <span class="task-info-label">Created At</span>
+            <span class="task-info-value">${formatDate(new Date(task.createdAt))}</span>
+          </div>
+        </div>
+
+        ${task.tags && task.tags.length > 0 ? `
+          <div class="task-tags" style="margin-top: var(--spacing-lg);">
+            ${task.tags.map(tag => `<span class="task-tag">${tag}</span>`).join('')}
+          </div>
+        ` : ''}
+      </div>
+
+      <div class="task-detail-section">
+        <h3>👥 Assigned Users</h3>
+        ${task.assignedTo.length > 0 ? `
+          <div class="task-user-list">
+            ${task.assignedTo.map(userId => `
+              <div class="task-user-item">
+                <div class="task-user-info">
+                  <div class="task-user-avatar">${usernames[userId].charAt(0).toUpperCase()}</div>
+                  <span style="font-weight: 500;">${usernames[userId]}</span>
+                </div>
+                ${(isCreator || userId === currentUser.id) ? `
+                  <button class="btn-sm btn-secondary" onclick="unassignUserFromTask('${taskId}', '${userId}')">Unassign</button>
+                ` : ''}
+              </div>
+            `).join('')}
+          </div>
+        ` : '<p style="color: var(--text-secondary);">No one assigned</p>'}
+      </div>
+
+      <div class="task-detail-section">
+        <h3>🙋 Volunteers</h3>
+        ${task.volunteers.length > 0 ? `
+          <div class="task-user-list">
+            ${task.volunteers.map(userId => `
+              <div class="task-user-item">
+                <div class="task-user-info">
+                  <div class="task-user-avatar">${usernames[userId].charAt(0).toUpperCase()}</div>
+                  <span style="font-weight: 500;">${usernames[userId]}</span>
+                </div>
+                ${userId === currentUser.id ? `
+                  <button class="btn-sm btn-secondary" onclick="unvolunteerFromTask('${taskId}')">Unvolunteer</button>
+                ` : ''}
+              </div>
+            `).join('')}
+          </div>
+        ` : '<p style="color: var(--text-secondary);">No volunteers yet</p>'}
+      </div>
+
+      <div class="task-detail-section">
+        <h3>💬 Notes & Comments (${notes.length})</h3>
+        <div class="task-notes-container">
+          ${notes.length > 0 ? notes.map(note => `
+            <div class="task-note-card">
+              <div class="task-note-header">
+                <span class="task-note-author">${note.username}</span>
+                <span class="task-note-time">${formatDate(new Date(note.createdAt))}</span>
+              </div>
+              <div class="task-note-content">${note.content}</div>
+            </div>
+          `).join('') : '<p style="color: var(--text-secondary);">No notes yet</p>'}
+        </div>
+        
+        <div class="task-add-note-form">
+          <textarea id="newTaskNote" placeholder="Add a note or comment..." rows="3"></textarea>
+          <button class="btn" onclick="addTaskNote('${taskId}')">Add Note</button>
+        </div>
+      </div>
+
+      <div class="task-detail-section">
+        <h3>⚡ Actions</h3>
+        <div class="task-actions">
+          ${!isVolunteered && !isAssigned ? `
+            <button class="task-action-btn volunteer-btn" onclick="volunteerForTask('${taskId}')">
+              🙋 Volunteer for this task
+            </button>
+          ` : ''}
+          ${isVolunteered ? `
+            <button class="task-action-btn unvolunteer-btn" onclick="unvolunteerFromTask('${taskId}')">
+              Remove Volunteer
+            </button>
+          ` : ''}
+          ${isCreator ? `
+            <button class="task-action-btn delete-btn" onclick="deleteTask('${taskId}')">
+              🗑️ Delete Task
+            </button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+
+    document.getElementById('taskDetailContent').innerHTML = content;
+    document.getElementById('taskDetailModal').style.display = 'flex';
+  } catch (error) {
+    console.error('Error loading task details:', error);
+    showToast('Failed to load task details', 'error');
+  }
+};
+
+// Close task detail modal
+window.closeTaskDetailModal = function() {
+  document.getElementById('taskDetailModal').style.display = 'none';
+};
+
+// Volunteer for task
+window.volunteerForTask = async function(taskId) {
+  try {
+    const response = await fetch(`${API_URL}/tasks/${taskId}/volunteer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: currentUser.id })
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('You volunteered for this task!', 'success');
+      closeTaskDetailModal();
+      await loadTasks(selectedEventForTasks);
+    } else {
+      showToast(data.message || 'Failed to volunteer', 'error');
+    }
+  } catch (error) {
+    console.error('Error volunteering:', error);
+    showToast('Failed to volunteer', 'error');
+  }
+};
+
+// Unvolunteer from task
+window.unvolunteerFromTask = async function(taskId) {
+  try {
+    const response = await fetch(`${API_URL}/tasks/${taskId}/volunteer/${currentUser.id}`, {
+      method: 'DELETE'
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('Removed volunteer status', 'success');
+      closeTaskDetailModal();
+      await loadTasks(selectedEventForTasks);
+    } else {
+      showToast(data.message || 'Failed to remove volunteer', 'error');
+    }
+  } catch (error) {
+    console.error('Error removing volunteer:', error);
+    showToast('Failed to remove volunteer', 'error');
+  }
+};
+
+// Unassign user from task
+window.unassignUserFromTask = async function(taskId, userId) {
+  try {
+    const response = await fetch(`${API_URL}/tasks/${taskId}/assign/${userId}`, {
+      method: 'DELETE'
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('User unassigned', 'success');
+      viewTaskDetails(taskId); // Refresh details
+      await loadTasks(selectedEventForTasks);
+    } else {
+      showToast(data.message || 'Failed to unassign user', 'error');
+    }
+  } catch (error) {
+    console.error('Error unassigning user:', error);
+    showToast('Failed to unassign user', 'error');
+  }
+};
+
+// Add note to task
+window.addTaskNote = async function(taskId) {
+  const textarea = document.getElementById('newTaskNote');
+  const content = textarea.value.trim();
+
+  if (!content) {
+    showToast('Please enter a note', 'warning');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/tasks/${taskId}/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: currentUser.id,
+        content
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('Note added', 'success');
+      textarea.value = '';
+      viewTaskDetails(taskId); // Refresh details
+    } else {
+      showToast(data.message || 'Failed to add note', 'error');
+    }
+  } catch (error) {
+    console.error('Error adding note:', error);
+    showToast('Failed to add note', 'error');
+  }
+};
+
+// Delete task
+window.deleteTask = async function(taskId) {
+  if (!confirm('Are you sure you want to delete this task? This cannot be undone.')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/tasks/${taskId}`, {
+      method: 'DELETE'
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('Task deleted successfully', 'success');
+      closeTaskDetailModal();
+      await loadTasks(selectedEventForTasks);
+    } else {
+      showToast(data.message || 'Failed to delete task', 'error');
+    }
+  } catch (error) {
+    console.error('Error deleting task:', error);
+    showToast('Failed to delete task', 'error');
+  }
+};
+
+// Load event options for task filter
+const loadTaskEventOptions = async () => {
+  if (!currentUser) return;
+
+  try {
+    const response = await fetch(`${API_URL}/events/user/${currentUser.id}`);
+    const data = await response.json();
+
+    if (data.success) {
+      const filter = document.getElementById('taskEventFilter');
+      if (filter) {
+        filter.innerHTML = '<option value="">All Events</option>' +
+          data.data.map(event => `<option value="${event.id}">${event.title}</option>`).join('');
+      }
+    }
+  } catch (error) {
+    console.error('Error loading events for filter:', error);
+  }
 };
 
 

@@ -20,6 +20,7 @@ export enum NotificationType {
   MEETING_REMINDER = 'meeting_reminder',
   MEETING_FLAGGED = 'meeting_flagged',
   TASK_ASSIGNED = 'task_assigned',
+  TASK_VOLUNTEER = 'task_volunteer',
   TASK_DUE_SOON = 'task_due_soon',
   PARTICIPANT_REQUEST = 'participant_request',
   GENERAL = 'general',
