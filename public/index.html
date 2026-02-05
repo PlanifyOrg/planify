@@ -140,12 +140,84 @@
         <!-- Tasks Section -->
         <section id="tasksSection" class="content-section">
           <div class="section-header">
-            <h2>My Tasks</h2>
-            <button id="createTaskBtn" class="btn">+ Create Task</button>
+            <h2>Task Board</h2>
+            <div class="task-controls">
+              <select id="taskEventFilter" class="form-select">
+                <option value="">All Events</option>
+              </select>
+              <button id="createTaskBtn" class="btn">+ Create Task</button>
+            </div>
           </div>
-          <div id="tasksList" class="list-group">
-            <!-- Tasks will be loaded here -->
+
+          <!-- Kanban Board -->
+          <div id="taskKanbanBoard" class="kanban-board">
+            <!-- Backlog Column -->
+            <div class="kanban-column" data-phase="backlog">
+              <div class="kanban-column-header">
+                <h3>📋 Backlog</h3>
+                <span class="task-count" id="backlogCount">0</span>
+              </div>
+              <div class="kanban-column-body" id="backlogTasks" data-phase="backlog">
+                <!-- Tasks will be loaded here -->
+              </div>
+            </div>
+
+            <!-- To Do Column -->
+            <div class="kanban-column" data-phase="todo">
+              <div class="kanban-column-header">
+                <h3>📝 To Do</h3>
+                <span class="task-count" id="todoCount">0</span>
+              </div>
+              <div class="kanban-column-body" id="todoTasks" data-phase="todo">
+                <!-- Tasks will be loaded here -->
+              </div>
+            </div>
+
+            <!-- In Progress Column -->
+            <div class="kanban-column" data-phase="in_progress">
+              <div class="kanban-column-header">
+                <h3>⚙️ In Progress</h3>
+                <span class="task-count" id="inProgressCount">0</span>
+              </div>
+              <div class="kanban-column-body" id="inProgressTasks" data-phase="in_progress">
+                <!-- Tasks will be loaded here -->
+              </div>
+            </div>
+
+            <!-- Review Column -->
+            <div class="kanban-column" data-phase="review">
+              <div class="kanban-column-header">
+                <h3>👀 Review</h3>
+                <span class="task-count" id="reviewCount">0</span>
+              </div>
+              <div class="kanban-column-body" id="reviewTasks" data-phase="review">
+                <!-- Tasks will be loaded here -->
+              </div>
+            </div>
+
+            <!-- Testing Column -->
+            <div class="kanban-column" data-phase="testing">
+              <div class="kanban-column-header">
+                <h3>🧪 Testing</h3>
+                <span class="task-count" id="testingCount">0</span>
+              </div>
+              <div class="kanban-column-body" id="testingTasks" data-phase="testing">
+                <!-- Tasks will be loaded here -->
+              </div>
+            </div>
+
+            <!-- Done Column -->
+            <div class="kanban-column" data-phase="done">
+              <div class="kanban-column-header">
+                <h3>✅ Done</h3>
+                <span class="task-count" id="doneCount">0</span>
+              </div>
+              <div class="kanban-column-body" id="doneTasks" data-phase="done">
+                <!-- Tasks will be loaded here -->
+              </div>
+            </div>
           </div>
+
           <div id="tasksEmpty" class="empty-state" style="display: none;">
             <div class="empty-state-icon">✓</div>
             <h3>No Tasks Yet</h3>
@@ -525,6 +597,108 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task Modal -->
+    <div id="taskModal" class="modal modal-large">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="taskModalTitle">Create Task</h2>
+          <button class="close-modal" onclick="closeTaskModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <form id="taskForm">
+            <div class="form-section">
+              <h3>📋 Basic Information</h3>
+              <div class="form-group">
+                <label>Task Title</label>
+                <input type="text" name="title" placeholder="Enter task title" required>
+              </div>
+              <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" placeholder="Task description" rows="3"></textarea>
+              </div>
+              <div class="form-group">
+                <label>Event</label>
+                <select name="eventId" id="taskEventSelect" required>
+                  <option value="">-- Select Event --</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <h3>⚙️ Details</h3>
+              <div class="form-inline">
+                <div class="form-group">
+                  <label>Priority</label>
+                  <select name="priority">
+                    <option value="low">🟢 Low</option>
+                    <option value="medium" selected>🟡 Medium</option>
+                    <option value="high">🟠 High</option>
+                    <option value="urgent">🔴 Urgent</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Phase</label>
+                  <select name="phase">
+                    <option value="backlog">📋 Backlog</option>
+                    <option value="todo" selected>📝 To Do</option>
+                    <option value="in_progress">⚙️ In Progress</option>
+                    <option value="review">👀 Review</option>
+                    <option value="testing">🧪 Testing</option>
+                    <option value="done">✅ Done</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-inline">
+                <div class="form-group">
+                  <label>Due Date</label>
+                  <input type="datetime-local" name="dueDate">
+                </div>
+                <div class="form-group">
+                  <label>Estimated Hours</label>
+                  <input type="number" name="estimatedHours" min="0" step="0.5" placeholder="e.g., 2.5">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Tags (comma-separated)</label>
+                <input type="text" name="tags" placeholder="e.g., frontend, urgent, bug">
+              </div>
+            </div>
+
+            <div class="form-section">
+              <h3>👥 Assignment</h3>
+              <div id="taskAssignedList" class="list-group" style="margin-bottom: 1rem;">
+                <!-- Assigned users will be added here -->
+              </div>
+              <div class="form-group">
+                <label>Search Event Participants</label>
+                <input type="text" id="taskAssigneeSearch" placeholder="Search by username">
+                <div id="taskAssigneeSearchResults" style="display: none; margin-top: 0.5rem;">
+                  <!-- Search results will appear here -->
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeTaskModal()">Cancel</button>
+          <button class="btn" onclick="submitTaskForm()">Create Task</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task Detail Modal -->
+    <div id="taskDetailModal" class="modal modal-large">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Task Details</h2>
+          <button class="close-modal" onclick="closeTaskDetailModal()">×</button>
+        </div>
+        <div class="modal-body" id="taskDetailContent">
+          <!-- Task details will be loaded here -->
         </div>
       </div>
     </div>

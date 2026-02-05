@@ -174,29 +174,44 @@ export function initializeDatabase(): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
-      event_id TEXT NOT NULL,
+      eventId TEXT NOT NULL,
       title TEXT NOT NULL,
       description TEXT,
-      due_date DATETIME NOT NULL,
+      assignedTo TEXT NOT NULL,
+      volunteers TEXT NOT NULL,
+      dueDate DATETIME NOT NULL,
       priority TEXT NOT NULL,
       status TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+      phase TEXT NOT NULL,
+      tags TEXT NOT NULL,
+      estimatedHours REAL,
+      actualHours REAL,
+      createdBy TEXT NOT NULL,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      completedAt DATETIME,
+      "order" INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (eventId) REFERENCES events(id) ON DELETE CASCADE,
+      FOREIGN KEY (createdBy) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
 
-  // Task assignments table
+  // Task notes table
   db.exec(`
-    CREATE TABLE IF NOT EXISTS task_assignments (
-      task_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (task_id, user_id),
-      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    CREATE TABLE IF NOT EXISTS task_notes (
+      id TEXT PRIMARY KEY,
+      taskId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      username TEXT NOT NULL,
+      content TEXT NOT NULL,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (taskId) REFERENCES tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
+
+  // Remove old task_assignments table as we now store assignments in tasks.assignedTo JSON
+  db.exec(`DROP TABLE IF EXISTS task_assignments`);
 
   // Notifications table
   db.exec(`

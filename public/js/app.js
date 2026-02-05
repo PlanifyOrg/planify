@@ -2792,4 +2792,435 @@ window.addMeetingParticipantById = function(userId, username) {
   showToast(`${username} added to meeting`, 'success', 'Participant Added');
 };
 
+// ============================================
+// TASKS SECTION
+// ============================================
+
+let currentTasks = [];
+let selectedEventForTasks = '';
+let taskAssignees = [];
+let taskEventParticipants = {};
+let draggedTask = null;
+
+// Load tasks
+const loadTasks = async (eventId = '') => {
+  if (!currentUser) return;
+
+  try {
+    let response;
+    if (eventId) {
+      response = await fetch(`${API_URL}/tasks/event/${eventId}`);
+    } else {
+      response = await fetch(`${API_URL}/tasks/user/${currentUser.id}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success) {
+      currentTasks = data.data || [];
+      renderKanbanBoard();
+      
+      const empty = document.getElementById('tasksEmpty');
+      const board = document.getElementById('taskKanbanBoard');
+      if (currentTasks.length === 0) {
+        empty.style.display = 'flex';
+        board.style.display = 'none';
+      } else {
+        empty.style.display = 'none';
+        board.style.display = 'flex';
+      }
+    }
+  } catch (error) {
+    console.error('Error loading tasks:', error);
+    showToast('Failed to load tasks', 'error');
+  }
+};
+
+// Render Kanban board
+const renderKanbanBoard = () => {
+  const phases = ['backlog', 'todo', 'in_progress', 'review', 'testing', 'done'];
+  
+  phases.forEach(phase => {
+    const phaseTasks = currentTasks.filter(task => task.phase === phase);
+    const container = document.getElementById(`${phase === 'in_progress' ? 'inProgress' : phase}Tasks`);
+    const countEl = document.getElementById(`${phase === 'in_progress' ? 'inProgress' : phase}Count`);
+    
+    if (countEl) countEl.textContent = phaseTasks.length;
+    
+    if (container) {
+      container.innerHTML = phaseTasks.length === 0 
+        ? '<div style="text-align: center; color: var(--text-secondary); font-size: 0.875rem; padding: 2rem;">No tasks</div>'
+        : phaseTasks.map(task => renderTaskCard(task)).join('');
+    }
+  });
+
+  // Setup drag and drop
+  setupDragAndDrop();
+};
+
+// Render task card
+const renderTaskCard = (task) => {
+  const priorityEmojis = {
+    low: '🟢',
+    medium: '🟡',
+    high: '🟠',
+    urgent: '🔴'
+  };
+
+  const isVolunteered = task.volunteers && task.volunteers.includes(currentUser.id);
+  const isAssigned = task.assignedTo && task.assignedTo.includes(currentUser.id);
+  
+  const dueDate = new Date(task.dueDate);
+  const now = new Date();
+  const daysUntilDue = Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24));
+  const isOverdue = daysUntilDue < 0;
+  const isDueSoon = daysUntilDue >= 0 && daysUntilDue <= 2;
+  
+  const allAssignedUsers = [...(task.assignedTo || []), ...(task.volunteers || [])];
+  const displayUsers = allAssignedUsers.slice(0, 3);
+  const remainingUsers = allAssignedUsers.length - displayUsers.length;
+
+  return `
+    <div class="task-card priority-${task.priority}" 
+         data-task-id="${task.id}"
+         draggable="true"
+         onclick="viewTaskDetails('${task.id}')">
+      ${isVolunteered ? '<div class="task-volunteer-badge">Volunteered</div>' : ''}
+      <div class="task-card-header">
+        <h4 class="task-title">${task.title}</h4>
+        <span class="task-priority-badge">${priorityEmojis[task.priority]}</span>
+      </div>
+      ${task.description ? `<p class="task-description">${task.description}</p>` : ''}
+      ${task.tags && task.tags.length > 0 ? `
+        <div class="task-tags">
+          ${task.tags.map(tag => `<span class="task-tag">${tag}</span>`).join('')}
+        </div>
+      ` : ''}
+      <div class="task-meta">
+        <div class="task-assignees">
+          ${displayUsers.map((userId, index) => {
+            const initial = getTaskUserInitial(userId);
+            return `<div class="task-avatar" title="User ${userId.substring(0, 8)}">${initial}</div>`;
+          }).join('')}
+          ${remainingUsers > 0 ? `<div class="task-avatar task-avatar-more">+${remainingUsers}</div>` : ''}
+          ${allAssignedUsers.length === 0 ? '<span style="font-size: 0.875rem;">Unassigned</span>' : ''}
+        </div>
+        <div class="task-due-date ${isOverdue ? 'overdue' : isDueSoon ? 'due-soon' : ''}">
+          📅 ${isOverdue ? 'Overdue' : isDueSoon ? `${daysUntilDue}d left` : formatDate(dueDate)}
+        </div>
+      </div>
+    </div>
+  `;
+};
+
+// Get user initial for avatar
+const getTaskUserInitial = (userId) => {
+  // Try to get username from event participants
+  for (const eventId in taskEventParticipants) {
+    const username = taskEventParticipants[eventId][userId];
+    if (username) return username.charAt(0).toUpperCase();
+  }
+  return userId.charAt(0).toUpperCase();
+};
+
+// Setup drag and drop
+const setupDragAndDrop = () => {
+  const taskCards = document.querySelectorAll('.task-card');
+  const columns = document.querySelectorAll('.kanban-column-body');
+
+  taskCards.forEach(card => {
+    card.addEventListener('dragstart', handleDragStart);
+    card.addEventListener('dragend', handleDragEnd);
+  });
+
+  columns.forEach(column => {
+    column.addEventListener('dragover', handleDragOver);
+    column.addEventListener('drop', handleDrop);
+    column.addEventListener('dragleave', handleDragLeave);
+  });
+};
+
+const handleDragStart = (e) => {
+  draggedTask = e.currentTarget;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/html', e.currentTarget.innerHTML);
+};
+
+const handleDragEnd = (e) => {
+  e.currentTarget.classList.remove('dragging');
+};
+
+const handleDragOver = (e) => {
+  if (e.preventDefault) {
+    e.preventDefault();
+  }
+  e.currentTarget.classList.add('drag-over');
+  e.dataTransfer.dropEffect = 'move';
+  return false;
+};
+
+const handleDragLeave = (e) => {
+  e.currentTarget.classList.remove('drag-over');
+};
+
+const handleDrop = async (e) => {
+  if (e.stopPropagation) {
+    e.stopPropagation();
+  }
+  e.preventDefault();
+
+  e.currentTarget.classList.remove('drag-over');
+
+  if (!draggedTask) return;
+
+  const taskId = draggedTask.getAttribute('data-task-id');
+  const newPhase = e.currentTarget.getAttribute('data-phase');
+
+  try {
+    const response = await fetch(`${API_URL}/tasks/${taskId}/move`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phase: newPhase })
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      await loadTasks(selectedEventForTasks);
+      showToast('Task moved successfully', 'success');
+    } else {
+      showToast(data.message || 'Failed to move task', 'error');
+    }
+  } catch (error) {
+    console.error('Error moving task:', error);
+    showToast('Failed to move task', 'error');
+  }
+
+  draggedTask = null;
+  return false;
+};
+
+// Open create task modal
+window.openCreateTaskModal = function() {
+  document.getElementById('taskModalTitle').textContent = 'Create Task';
+  document.getElementById('taskForm').reset();
+  taskAssignees = [];
+  renderTaskAssignees();
+  loadEventOptionsForTask();
+  document.getElementById('taskModal').style.display = 'flex';
+};
+
+// Load event options for task
+const loadEventOptionsForTask = async () => {
+  if (!currentUser) return;
+
+  try {
+    const response = await fetch(`${API_URL}/events/user/${currentUser.id}`);
+    const data = await response.json();
+
+    if (data.success) {
+      const select = document.getElementById('taskEventSelect');
+      select.innerHTML = '<option value="">-- Select Event --</option>' +
+        data.data.map(event => `<option value="${event.id}">${event.title}</option>`).join('');
+    }
+  } catch (error) {
+    console.error('Error loading events:', error);
+  }
+};
+
+// Close task modal
+window.closeTaskModal = function() {
+  document.getElementById('taskModal').style.display = 'none';
+};
+
+// Submit task form
+window.submitTaskForm = async function() {
+  const form = document.getElementById('taskForm');
+  const formData = new FormData(form);
+
+  const tags = formData.get('tags') ? formData.get('tags').split(',').map(t => t.trim()).filter(t => t) : [];
+
+  const taskData = {
+    eventId: formData.get('eventId'),
+    title: formData.get('title'),
+    description: formData.get('description'),
+    priority: formData.get('priority'),
+    phase: formData.get('phase'),
+    dueDate: formData.get('dueDate') || null,
+    estimatedHours: formData.get('estimatedHours') ? parseFloat(formData.get('estimatedHours')) : null,
+    tags,
+    assignedTo: taskAssignees,
+    createdBy: currentUser.id
+  };
+
+  if (!taskData.title || !taskData.eventId) {
+    showToast('Please fill in all required fields', 'warning');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(taskData)
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('Task created successfully', 'success');
+      closeTaskModal();
+      await loadTasks(selectedEventForTasks);
+    } else {
+      showToast(data.message || 'Failed to create task', 'error');
+    }
+  } catch (error) {
+    console.error('Error creating task:', error);
+    showToast('Failed to create task', 'error');
+  }
+};
+
+// Search task assignees
+window.searchTaskAssignees = async function() {
+  const eventId = document.getElementById('taskEventSelect').value;
+  if (!eventId) {
+    showToast('Please select an event first', 'warning');
+    return;
+  }
+
+  const searchInput = document.getElementById('taskAssigneeSearch');
+  const searchValue = searchInput.value.trim().toLowerCase();
+  const resultsContainer = document.getElementById('taskAssigneeSearchResults');
+
+  if (!searchValue) {
+    resultsContainer.style.display = 'none';
+    return;
+  }
+
+  try {
+    // Get event details with participants
+    const response = await fetch(`${API_URL}/events/${eventId}`);
+    const data = await response.json();
+
+    if (!data.success) {
+      resultsContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 1rem;">Failed to load participants</p>';
+      resultsContainer.style.display = 'block';
+      return;
+    }
+
+    const event = data.data;
+    
+    // Fetch usernames for participants
+    const participantPromises = event.participantIds.map(async (userId) => {
+      try {
+        const userResponse = await fetch(`${API_URL}/auth/user/${userId}`);
+        const userData = await userResponse.json();
+        return {
+          id: userId,
+          username: userData.data?.username || 'Unknown User'
+        };
+      } catch {
+        return { id: userId, username: 'Unknown User' };
+      }
+    });
+
+    const participants = await Promise.all(participantPromises);
+
+    // Cache usernames
+    if (!taskEventParticipants[eventId]) {
+      taskEventParticipants[eventId] = {};
+    }
+    participants.forEach(p => {
+      taskEventParticipants[eventId][p.id] = p.username;
+    });
+
+    // Filter participants based on search
+    const results = participants.filter(p => 
+      p.username.toLowerCase().includes(searchValue) ||
+      p.id.toLowerCase().includes(searchValue)
+    );
+
+    if (results.length === 0) {
+      resultsContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 1rem;">No participants found</p>';
+      resultsContainer.style.display = 'block';
+      return;
+    }
+
+    resultsContainer.innerHTML = results.map(participant => `
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: white; border-radius: var(--radius-md); margin-bottom: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--primary-gradient); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600;">
+            ${participant.username.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div style="font-weight: 600; font-size: 0.875rem;">${participant.username}</div>
+          </div>
+        </div>
+        ${!taskAssignees.includes(participant.id)
+          ? `<button type="button" class="btn btn-sm" onclick="addTaskAssignee('${participant.id}', '${participant.username}')">Assign</button>`
+          : '<span style="font-size: 0.875rem; color: var(--text-secondary);">Already assigned</span>'
+        }
+      </div>
+    `).join('');
+
+    resultsContainer.style.display = 'block';
+  } catch (error) {
+    console.error('Error searching assignees:', error);
+    resultsContainer.innerHTML = '<p style="text-align: center; color: var(--error); padding: 1rem;">Failed to search participants</p>';
+    resultsContainer.style.display = 'block';
+  }
+};
+
+// Add task assignee
+window.addTaskAssignee = function(userId, username) {
+  if (taskAssignees.includes(userId)) return;
+  
+  taskAssignees.push(userId);
+  
+  // Cache username
+  const eventId = document.getElementById('taskEventSelect').value;
+  if (!taskEventParticipants[eventId]) {
+    taskEventParticipants[eventId] = {};
+  }
+  taskEventParticipants[eventId][userId] = username;
+  
+  renderTaskAssignees();
+  searchTaskAssignees(); // Refresh results
+  showToast(`${username} assigned to task`, 'success');
+};
+
+// Remove task assignee
+window.removeTaskAssignee = function(userId) {
+  taskAssignees = taskAssignees.filter(id => id !== userId);
+  renderTaskAssignees();
+  searchTaskAssignees(); // Refresh results
+};
+
+// Render task assignees list
+const renderTaskAssignees = () => {
+  const container = document.getElementById('taskAssignedList');
+  const eventId = document.getElementById('taskEventSelect').value;
+  
+  if (taskAssignees.length === 0) {
+    container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 1rem;">No one assigned yet</p>';
+    return;
+  }
+
+  container.innerHTML = taskAssignees.map(userId => {
+    const username = taskEventParticipants[eventId]?.[userId] || userId.substring(0, 8);
+    return `
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: var(--gray-50); border-radius: var(--radius-md);">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--primary-gradient); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600;">
+            ${username.charAt(0).toUpperCase()}
+          </div>
+          <span style="font-weight: 500;">${username}</span>
+        </div>
+        <button type="button" class="btn-sm btn-secondary" onclick="removeTaskAssignee('${userId}')">Remove</button>
+      </div>
+    `;
+  }).join('');
+};
+
 

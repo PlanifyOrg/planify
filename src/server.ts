@@ -9,11 +9,13 @@ import { EventService } from './services/EventService';
 import { NotificationService } from './services/NotificationService';
 import { MeetingService } from './services/MeetingService';
 import { OrganizationService } from './services/OrganizationService';
+import { TaskService } from './services/TaskService';
 import { AuthController } from './controllers/AuthController';
 import { EventController } from './controllers/EventController';
 import { NotificationController } from './controllers/NotificationController';
 import { MeetingController } from './controllers/MeetingController';
 import { OrganizationController } from './controllers/OrganizationController';
+import { TaskController } from './controllers/TaskController';
 import { JoinRequestController } from './controllers/JoinRequestController';
 import { initializeDatabase } from './utils/database';
 
@@ -29,6 +31,7 @@ const eventService = new EventService();
 const notificationService = new NotificationService();
 const meetingService = new MeetingService();
 const organizationService = new OrganizationService();
+const taskService = new TaskService();
 
 // Initialize controllers
 const authController = new AuthController(authService);
@@ -42,6 +45,7 @@ const meetingController = new MeetingController(
   authService
 );
 const organizationController = new OrganizationController(organizationService);
+const taskController = new TaskController(taskService, authService, notificationService);
 
 // Create Express app
 const app: Application = express();
@@ -126,6 +130,21 @@ app.post('/api/organizations/:organizationId/join-requests', JoinRequestControll
 app.get('/api/organizations/:organizationId/join-requests', JoinRequestController.getPendingRequests);
 app.post('/api/join-requests/:requestId/approve', JoinRequestController.approveJoinRequest);
 app.post('/api/join-requests/:requestId/reject', JoinRequestController.rejectJoinRequest);
+
+// Task routes
+app.post('/api/tasks', taskController.createTask);
+app.get('/api/tasks/:id', taskController.getTaskById);
+app.get('/api/tasks/event/:eventId', taskController.getTasksByEventId);
+app.get('/api/tasks/user/:userId', taskController.getTasksByUserId);
+app.put('/api/tasks/:id', taskController.updateTask);
+app.post('/api/tasks/:id/move', taskController.moveTaskToPhase);
+app.post('/api/tasks/:id/assign', taskController.assignUser);
+app.delete('/api/tasks/:id/assign/:userId', taskController.unassignUser);
+app.post('/api/tasks/:id/volunteer', taskController.volunteerForTask);
+app.delete('/api/tasks/:id/volunteer/:userId', taskController.removeVolunteer);
+app.post('/api/tasks/:id/notes', taskController.addNote);
+app.get('/api/tasks/:id/notes', taskController.getTaskNotes);
+app.delete('/api/tasks/:id', taskController.deleteTask);
 
 // 404 handler for API routes
 app.use('/api/*', (_req: Request, res: Response) => {
